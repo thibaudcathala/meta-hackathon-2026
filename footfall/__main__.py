@@ -65,6 +65,12 @@ def cmd_crowd(args):
     print(f"\n{ok}/{len(results)} reached the goal, cost ${summary['cost_usd']:.4f}")
 
 
+def cmd_wall(args):
+    from . import wall
+    out, speed = wall.build(args.crowd, seconds=args.seconds)
+    print(f"{out} (x{speed:.0f} speed)")
+
+
 def cmd_ledger(args):
     ledger = Ledger(LEDGER)
     print(f"budget ${ledger.budget:.2f} (FOOTFALL_BUDGET_USD), margin ${ledger.margin:.2f}")
@@ -90,6 +96,10 @@ def main():
     c.add_argument("--max-turns", type=int, default=60, help="cost ceiling per persona")
     c.add_argument("--size", type=int, nargs=2, default=[1280, 800])
     c.set_defaults(func=cmd_crowd)
+    w = sub.add_parser("wall", help="one video with every persona's screen, as they saw it")
+    w.add_argument("crowd", help="a runs/<time>-crowd directory")
+    w.add_argument("--seconds", type=int, default=45)
+    w.set_defaults(func=cmd_wall)
     sub.add_parser("ledger", help="show spend so far").set_defaults(func=cmd_ledger)
     args = parser.parse_args()
     args.func(args)

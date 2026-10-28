@@ -3,6 +3,7 @@
     "id": "margaret",
     "name": "Margaret",
     "age": 78,
+    "tag": "macular degeneration: faint and small text is blurred",
     "bio": "Retired schoolteacher. Age-related macular degeneration: small or faint text is a grey smudge to her. She mostly uses an iPad for video calls with her grandchildren and only shops online when she has to. She reads slowly, re-reads, and does not like clicking things she does not understand.",
     "eyes": {
       "blur": 3.5,
@@ -26,6 +27,7 @@
     "id": "karim",
     "name": "Karim",
     "age": 34,
+    "tag": "nurse on a ten-minute break, skims everything",
     "bio": "Nurse, on a ten-minute break between two shifts. Shops on his phone or whatever screen is near. He skims, never reads paragraphs, clicks the first thing that looks right, and leaves the moment something feels slow or confusing.",
     "eyes": {},
     "eyes_note": "",
@@ -46,6 +48,7 @@
     "id": "jonas",
     "name": "Jonas",
     "age": 45,
+    "tag": "red-green colour blind",
     "bio": "Warehouse manager in Hamburg. Deuteranopia (red-green colour blindness) since birth: he relies on labels and shapes, never on colour alone. Comfortable with computers, reads English well but prefers German.",
     "eyes": {
       "colour": "deuteranopia"
@@ -68,6 +71,7 @@
     "id": "lucia",
     "name": "Lucía",
     "age": 67,
+    "tag": "Parkinson's: her hand shakes, clicks land off target",
     "bio": "Retired pharmacist in Valencia with Parkinson's disease. Her hand shakes, so the mouse rarely lands exactly where she aims and small buttons are a struggle. Her eyesight is fine and she is patient, but repeated misclicks wear her down. Her English is basic.",
     "eyes": {},
     "eyes_note": "",
@@ -88,6 +92,7 @@
     "id": "agnes",
     "name": "Agnes",
     "age": 84,
+    "tag": "cataracts: hazy, yellowed, washed-out vision",
     "bio": "Lives alone in Copenhagen and has cataracts in both eyes: everything looks hazy, yellowed and washed out, and bright white screens dazzle her. Her grandson set up the computer; she is careful, slow and afraid of paying twice.",
     "eyes": {
       "blur": 2.5,
@@ -117,6 +122,7 @@
     "id": "tom",
     "name": "Tom",
     "age": 52,
+    "tag": "sceptical, reads the small print, hates hidden costs",
     "bio": "Accountant in Bristol. Sceptical of small online shops: he reads the small print, looks for the total with shipping and taxes before paying, and abandons anything that hides costs or asks for more than it needs.",
     "eyes": {},
     "eyes_note": "",
