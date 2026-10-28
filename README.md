@@ -16,7 +16,8 @@ Built for the Meta Global AI Developer Hackathon 2026 (October 26 to November 4)
 
 Status: proof of concept. First end-to-end run on the hosted models: Muse Spark read Blender
 Studio's 2-minute "Creating Meshes" lesson (CC BY 4.0) into 6 checked steps, then redid them in
-Blender 5.2; 6/6 steps verified, 30 model calls, $0.27.
+Blender 5.2. Both actors finished it: Muse Spark 6/6 steps verified (30 calls, 627 s, $0.27),
+Muse Wonder 6/6, each on the first attempt (21 calls, 333 s, $0.36).
 
 ## How it works
 
