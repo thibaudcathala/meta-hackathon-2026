@@ -50,7 +50,7 @@ def cmd_run(args):
         agent = Apprentice(client, desktop, app, run, model=args.model, max_turns=args.max_turns,
                            max_attempts=args.attempts, rewind=args.rewind,
                            ack_safety=args.ack_safety, frames=not args.no_frames,
-                           effort=args.effort)
+                           effort=args.effort, tool=args.tool)
         t0 = time.time()
         results = agent.run_tutorial(tut, only=args.steps and args.steps.split(","))
         final = app.scene()
@@ -129,6 +129,8 @@ def main(argv=None):
                         "private display); other safety checks still stop the step")
     r.add_argument("--no-frames", action="store_true", help="do not show tutorial frames")
     r.add_argument("--effort", choices=["low", "medium", "high"], help="reasoning effort")
+    r.add_argument("--tool", choices=["computer", "function"],
+                   help="computer tool or an equivalent function (default: by model)")
     r.add_argument("--record", action="store_true", help="film the display to screen.mp4")
     r.add_argument("--size", type=size, default=(1280, 800))
     r.add_argument("--keep-open", action="store_true")

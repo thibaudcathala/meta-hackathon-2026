@@ -13,7 +13,7 @@ from pathlib import Path
 
 from PIL import Image
 
-from .meta import output_items, output_text
+from .meta import output_text
 from .verify import verify
 
 SYSTEM = """You are an apprentice redoing a Blender tutorial on a real Blender {version} window.
@@ -37,6 +37,33 @@ not claim it is done unless the screenshot shows it. If it cannot be done, say w
 # private display inside a sandbox, so a generic "confirm this action" is not a risk. Anything
 # else (e.g. suspected prompt injection) stops the step.
 ACKABLE = {"computer_action_requires_confirmation"}
+
+
+# Same action vocabulary as the built-in computer tool, offered as a plain function for models
+# whose API rejects {"type": "computer"} (muse-wonder-1.0 answered "Unsupported tool type").
+COMPUTER_FUNCTION = {
+    "type": "function", "name": "computer",
+    "description": "Operate the mouse and keyboard on the live screen. Coordinates are pixels "
+                   "of the latest screenshot. The actions run in order, then you receive a new "
+                   "screenshot.",
+    "parameters": {"type": "object", "required": ["actions"], "properties": {"actions": {
+        "type": "array", "items": {"type": "object", "required": ["type"], "properties": {
+            "type": {"type": "string", "enum": ["click", "double_click", "drag", "keypress",
+                                               "move", "scroll", "type", "wait", "screenshot"]},
+            "x": {"type": "integer"}, "y": {"type": "integer"},
+            "button": {"type": "string", "enum": ["left", "right", "middle"]},
+            "keys": {"type": "array", "items": {"type": "string"},
+                     "description": "keys held together, e.g. [\"ctrl\", \"z\"] or [\"Tab\"]"},
+            "text": {"type": "string"},
+            "path": {"type": "array", "items": {"type": "object", "properties": {
+                "x": {"type": "integer"}, "y": {"type": "integer"}}}},
+            "scroll_x": {"type": "integer"}, "scroll_y": {"type": "integer"},
+            "ms": {"type": "integer"}}}}}},
+}
+
+
+def tool_mode(model):
+    return "function" if model.startswith("muse-wonder") else "computer"
 
 
 def data_url(png):
@@ -90,7 +117,7 @@ class Run:
 class Apprentice:
     def __init__(self, client, desktop, app, run, model="muse-wonder-1.0", max_turns=30,
                  max_attempts=3, rewind=False, ack_safety=False, version="5.2", frames=True,
-                 effort=None, say=print):
+                 effort=None, tool=None, say=print):
         self.client, self.desktop, self.app, self.run = client, desktop, app, run
         self.model = model
         self.max_turns = max_turns
@@ -98,14 +125,16 @@ class Apprentice:
         self.rewind = rewind
         self.ack_safety = ack_safety
         self.frames = frames
+        self.tool = tool or tool_mode(model)
         self.effort = effort
         self.instructions = SYSTEM.format(version=version)
         self.say = say
 
     def request(self, input_items, previous=None, tag=""):
         # Reasoning shares the output allowance: keep room so a turn is not cut mid-thought.
+        tools = [COMPUTER_FUNCTION] if self.tool == "function" else [{"type": "computer"}]
         payload = {"model": self.model, "instructions": self.instructions,
-                   "tools": [{"type": "computer"}], "input": input_items,
+                   "tools": tools, "input": input_items,
                    "max_output_tokens": 8000}
         if self.effort:
             payload["reasoning"] = {"effort": self.effort}
@@ -120,10 +149,9 @@ class Apprentice:
     def act(self, response, step_id):
         """Drive one step's observe-act loop. Returns (last response, final message)."""
         for turn in range(self.max_turns):
-            calls = output_items(response, "computer_call")
-            if not calls:
+            call = self.next_call(response)
+            if call is None:
                 return response, output_text(response)
-            call = calls[0]
             checks = call.get("pending_safety_checks") or []
             if checks:
                 ok = self.ack_safety and all(c.get("code") in ACKABLE for c in checks)
@@ -136,12 +164,29 @@ class Apprentice:
             png = self.desktop.screenshot()
             self.run.event("actions", step=step_id, turn=turn, actions=call["actions"],
                            shot=self.run.shot(png, f"{step_id}-t{turn}"))
-            response = self.request([{
-                "type": "computer_call_output", "call_id": call["call_id"],
-                "acknowledged_safety_checks": checks,
-                "output": {"type": "computer_screenshot", "image_url": data_url(png)},
-            }], previous=response["id"], tag=step_id)
+            if call["kind"] == "function":
+                reply = [{"type": "function_call_output", "call_id": call["call_id"],
+                          "output": "Done. The screen after your actions follows."},
+                         {"role": "user", "content": [image(png)]}]
+            else:
+                reply = [{"type": "computer_call_output", "call_id": call["call_id"],
+                          "acknowledged_safety_checks": checks,
+                          "output": {"type": "computer_screenshot", "image_url": data_url(png)}}]
+            response = self.request(reply, previous=response["id"], tag=step_id)
         return response, "stopped: turn budget reached"
+
+    def next_call(self, response):
+        """The model's next batch of actions, from a computer_call or a computer() function call."""
+        for item in response.get("output", []):
+            if item.get("type") == "computer_call":
+                return {**item, "kind": "computer"}
+            if item.get("type") == "function_call" and item.get("name") == "computer":
+                try:
+                    actions = json.loads(item.get("arguments") or "{}").get("actions", [])
+                except json.JSONDecodeError:
+                    actions = []
+                return {"kind": "function", "call_id": item["call_id"], "actions": actions}
+        return None
 
     def step_prompt(self, tutorial, index):
         step = tutorial["steps"][index]

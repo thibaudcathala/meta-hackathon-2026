@@ -22,9 +22,9 @@ PRICES = {
     "muse-spark-1.3-contributor": (0.10, 0.002, 0.20),
 }
 
-# Guess for one 1280x800 screenshot, used only for the pre-call estimate; recalibrate from the
-# ledger after the first real calls.
-DEFAULT_IMAGE_TOKENS = 2500
+# One 1280x800 screenshot, for the pre-call estimate only: a Wonder call with one such image
+# and a short prompt billed 1,774 input tokens (2026-10-28); rounded up for safety.
+DEFAULT_IMAGE_TOKENS = 2000
 
 
 class BudgetExceeded(RuntimeError):
