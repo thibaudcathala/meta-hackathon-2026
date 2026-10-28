@@ -1,0 +1,17 @@
+{
+  "name": "Buy a T-shirt",
+  "site": "Medusa DTC starter storefront, self-hosted",
+  "url": "http://localhost:8000",
+  "task": "Buy one black Medusa T-Shirt in size M and have it delivered to your home. Pay with whatever payment option the shop offers.",
+  "success": {
+    "describe": "an order placed with your email that contains SHIRT-M-BLACK",
+    "sql": "select li.variant_sku from \"order\" o join order_item oi on oi.order_id = o.id join order_line_item li on li.id = oi.item_id where o.email = :'email' and o.created_at >= to_timestamp(:start)",
+    "expect": "SHIRT-M-BLACK"
+  },
+  "funnel": [
+    {"name": "product page", "url": "/products/"},
+    {"name": "cart", "url": "/cart"},
+    {"name": "checkout", "url": "/checkout"},
+    {"name": "order confirmed", "url": "/order/"}
+  ]
+}

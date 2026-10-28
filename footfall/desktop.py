@@ -51,7 +51,7 @@ def keysym_for(name):
         name = low.upper()
     sym = XK.string_to_keysym(name)
     if sym == 0 and len(name) == 1:
-        sym = ord(name)
+        sym = ord(name) if ord(name) < 256 else 0x01000000 | ord(name)  # X11 Unicode keysyms
     if sym == 0:
         raise ValueError(f"unknown key {name!r}")
     return sym
@@ -218,13 +218,24 @@ class VirtualDesktop:
             self._fake(X.KeyRelease, c)
         time.sleep(0.05)
 
+    def _borrow_keycode(self, sym):
+        """Map a character missing from the US keymap (í, ø, ß...) onto a spare keycode."""
+        first = self.d.display.info.min_keycode
+        count = self.d.display.info.max_keycode - first + 1
+        mapping = self.d.get_keyboard_mapping(first, count)
+        spare = next((first + i for i in range(count - 1, -1, -1) if not any(mapping[i])), None)
+        if spare is None:
+            raise ValueError(f"cannot type keysym {sym:#x}: no spare keycode")
+        self.d.change_keyboard_mapping(spare, [(sym, sym)])
+        self.d.sync()
+        time.sleep(0.05)
+        return [(spare, 0)]
+
     def type(self, text):
         shift = self.d.keysym_to_keycode(XK.string_to_keysym("Shift_L"))
         for ch in text:
             sym = keysym_for(ch)
-            codes = list(self.d.keysym_to_keycodes(sym))
-            if not codes:
-                raise ValueError(f"cannot type {ch!r} on this keymap")
+            codes = list(self.d.keysym_to_keycodes(sym)) or self._borrow_keycode(sym)
             code, index = codes[0]
             if index & 1:
                 self._fake(X.KeyPress, shift)
