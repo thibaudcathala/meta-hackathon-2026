@@ -8,17 +8,19 @@ the context small, so a 30-turn session costs about the same per turn as the fir
 The verdict never comes from the model: the shop's database says whether the order exists.
 """
 
+import io
 import json
+import re
 import time
 from pathlib import Path
 
-from PIL import ImageChops
+from PIL import ImageChops, ImageDraw
 
 from .browser import Browser
 from .computer import ACKABLE, Run, computer_function, image, next_call, tool_mode
 from .desktop import VirtualDesktop
 from .meta import ApiError, output_text
-from .senses import Hands, see_png
+from .senses import Hands, see, see_png
 from . import store
 
 SYSTEM = """You are {name}, {age}. {bio}
@@ -95,9 +97,19 @@ def same(a, b, slack=25):
                and abs(x.get("y", 0) - y.get("y", 0)) <= slack for x, y in zip(a, b))
 
 
+LOOK = """{name} is about to {action}. Their thought: "{thought}"
+
+The image is a close-up of {name}'s screen around that spot, enlarged {k}x, as they see it. The
+red cross marks exactly where the pointer is about to land. If it is on what they mean to
+click, reply {{"ok": true}}. If what they mean is elsewhere in the close-up, reply with its
+centre in the close-up's pixels: {{"x": 123, "y": 45}}. If it is not in the close-up at all,
+reply {{"ok": true}}. JSON only."""
+
+
 class Session:
     def __init__(self, client, persona, scenario, out_dir, model="muse-spark-1.3", size=None,
-                 record=True, effort="low", say=print, run_id=None, max_turns=60):
+                 record=True, effort="low", say=print, run_id=None, max_turns=60,
+                 closed_loop=True):
         self.client, self.persona, self.scenario = client, persona, scenario
         self.dir = Path(out_dir)
         self.device = persona.get("device", "laptop")
@@ -110,6 +122,7 @@ class Session:
         self.model, self.record = model, record
         self.effort, self.say = effort, say
         self.max_turns = max_turns  # a cost ceiling; giving up is the persona's own call
+        self.closed_loop = closed_loop
         self.tool = tool_mode(model)
         self.run = Run(self.dir)
         self.hands = Hands(persona.get("hands", {}).get("tremor", 0), seed=persona["id"])
@@ -168,16 +181,54 @@ class Session:
                 self.funnel[stage["name"]] = turn
                 self.run.event("funnel", stage=stage["name"], turn=turn, url=url)
 
-    def act(self, call, turn):
+    def look(self, action, thought, turn, half=90, k=3):
+        """Closed-loop pointing: before a click lands, the persona looks at the spot, as people
+        do while they move a mouse, and corrects its aim. The model alone points open-loop and
+        misses small targets (dropdown rows, size buttons) by a row. The close-up is taken
+        through the persona's own eyes, so poor sight still makes poor corrections."""
+        if action.get("type") not in ("click", "double_click") or "x" not in action:
+            return action
+        w, h = self.size
+        x, y = action["x"], action["y"]
+        box = (max(0, x - half), max(0, y - half), min(w, x + half), min(h, y + half))
+        crop = see(self.desktop.grab(cursor=False), self.persona.get("eyes")).crop(box)
+        crop = crop.resize((crop.width * k, crop.height * k))
+        cx, cy = (x - box[0]) * k, (y - box[1]) * k
+        d = ImageDraw.Draw(crop)
+        d.line([(cx - 14, cy), (cx + 14, cy)], fill="red", width=3)
+        d.line([(cx, cy - 14), (cx, cy + 14)], fill="red", width=3)
+        buf = io.BytesIO()
+        crop.save(buf, "PNG")
+        prompt = LOOK.format(name=self.persona["name"], action=describe(action),
+                             thought=thought[:300], k=k)
+        try:
+            response = self.client.create({
+                "model": self.model, "max_output_tokens": 2000, "reasoning": {"effort": "low"},
+                "input": [{"role": "user", "content": [{"type": "input_text", "text": prompt},
+                                                       image(buf.getvalue())]}]},
+                tag=self.persona["id"] + "-look")
+            found = json.loads(re.search(r"\{.*?\}", output_text(response), re.S).group(0))
+        except (ApiError, AttributeError, ValueError):
+            return action
+        if "x" not in found or "y" not in found:
+            return action
+        fixed = {**action, "x": round(box[0] + float(found["x"]) / k),
+                 "y": round(box[1] + float(found["y"]) / k)}
+        self.run.event("look", turn=turn, aimed=[x, y], corrected=[fixed["x"], fixed["y"]])
+        return fixed
+
+    def act(self, call, turn, thought=""):
         failed = []
         for i, action in enumerate(call["actions"]):
-            aimed = self.hands.aim(unzoom(action, self.zoom))
+            meant = self.look(unzoom(action, self.zoom), thought, turn) if self.closed_loop \
+                else unzoom(action, self.zoom)
+            aimed = self.hands.aim(meant)
             try:
                 self.desktop.execute(aimed)
             except (KeyError, TypeError, ValueError) as exc:
                 failed.append(f"{describe(action)} did not work ({exc})")
                 break
-            if aimed != unzoom(action, self.zoom):
+            if aimed != meant:
                 self.run.event("tremor", turn=turn, aimed=action, landed=aimed)
         return failed
 
@@ -223,7 +274,7 @@ class Session:
                 self.journal.append(f'You thought: "{thought[:240]}" (no action)')
                 before = None
                 continue
-            failed = self.act(call, turn)
+            failed = self.act(call, turn, thought)
             self.run.event("turn", turn=turn, thought=thought, actions=call["actions"],
                            failed=failed, shot=shot)
             self.say(f"  [{p['id']}] {turn:2d} {thought[:110]!r} -> "
