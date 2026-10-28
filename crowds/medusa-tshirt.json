@@ -1,0 +1,202 @@
+{
+ "site": "http://localhost:8000",
+ "audience": "Everyday shoppers across seven European countries buying cheap T-shirts and sweatshirts for themselves and as gifts, mostly on phones and often shopping in English as a second language. The screenshots show a bare English starter storefront with only basic Categories, Shipping information and Return policy links, no product guidance or brand story. That signals a price-driven general public crowd, including hurried browsers, gift-buyers and less confident users who just need size, colour and delivery to work.",
+ "owner_said": "We are a small European clothing brand selling everyday basics (T-shirts, sweatshirts, sweatpants, shorts) at low prices to the general public, shipped to seven European countries. Many orders are gifts.",
+ "personas": [
+  {
+   "id": "lea",
+   "name": "Lea",
+   "age": 21,
+   "tag": "student buying basics",
+   "bio": "Lea studies nursing in Berlin and lives in a shared flat. She shops almost entirely on her phone on the bus or between lectures and compares prices quickly. She came today because she needs a plain black T-shirt for placement and saw this shop linked as cheap. She skims titles and pictures and checks size and delivery cost before deciding.",
+   "why": "Young budget student on phone is the core buyer for low-price everyday basics.",
+   "device": "phone",
+   "eyes": {},
+   "eyes_note": "",
+   "hands": {
+    "tremor": 0
+   },
+   "details": {
+    "first_name": "Lea",
+    "last_name": "Fischer",
+    "address": "Berliner Strasse 12",
+    "city": "Berlin",
+    "postal_code": "10115",
+    "country": "Germany",
+    "phone": "+49 151 555 012"
+   }
+  },
+  {
+   "id": "camille",
+   "name": "Camille",
+   "age": 33,
+   "tag": "busy mum in a hurry",
+   "bio": "Camille works part-time in a bakery outside Lyon and has two young children. She is comfortable ordering online but always in a rush, usually on her phone while dinner cooks. She is buying the black T-shirt as a last-minute gift for her brother. She does not read carefully, she searches, taps the first match and heads straight to checkout.",
+   "why": "Hurried parent buying a gift on a phone is very common for this kind of shop.",
+   "device": "phone",
+   "eyes": {},
+   "eyes_note": "",
+   "hands": {
+    "tremor": 0
+   },
+   "details": {
+    "first_name": "Camille",
+    "last_name": "Dubois",
+    "address": "14 rue des Lilas",
+    "city": "Lyon",
+    "postal_code": "69003",
+    "country": "France",
+    "phone": "+33 6 23 555 041"
+   }
+  },
+  {
+   "id": "marco",
+   "name": "Marco",
+   "age": 45,
+   "tag": "sceptical first-time buyer",
+   "bio": "Marco drives a forklift near Milan and fixes things at home. He uses a laptop in the evening for shopping and banking and dislikes unknown webshops after a bad experience with returns. He came because his daughter asked for a Medusa T-shirt but he wants proof of delivery costs and returns first. He reads slowly in English and re-reads shipping and policy pages before he types any card details.",
+   "why": "Cautious older working man checking policies before buying from an unfamiliar shop fits this low-trust general audience.",
+   "device": "laptop",
+   "eyes": {},
+   "eyes_note": "",
+   "hands": {
+    "tremor": 0
+   },
+   "details": {
+    "first_name": "Marco",
+    "last_name": "Rossi",
+    "address": "Via Roma 45",
+    "city": "Milano",
+    "postal_code": "20121",
+    "country": "Italy",
+    "phone": "+39 340 555 067"
+   }
+  },
+  {
+   "id": "chloe",
+   "name": "Chloe",
+   "age": 28,
+   "tag": "regular online shopper",
+   "bio": "Chloe works in customer support in Manchester and shops online two or three times a month. She is confident with checkouts and usually uses her phone on the sofa. She needs a black M T-shirt for her partner to wear on holiday next week. She filters by colour and size and looks for delivery time and total price.",
+   "why": "Confident UK phone shopper buying everyday clothing for family is typical of the seven-country audience.",
+   "device": "phone",
+   "eyes": {},
+   "eyes_note": "",
+   "hands": {
+    "tremor": 0
+   },
+   "details": {
+    "first_name": "Chloe",
+    "last_name": "Taylor",
+    "address": "23 Ash Road",
+    "city": "Manchester",
+    "postal_code": "M14 5TQ",
+    "country": "United Kingdom",
+    "phone": "+44 7700 900231"
+   }
+  },
+  {
+   "id": "agneta",
+   "name": "Agneta",
+   "age": 68,
+   "tag": "grandmother buying a gift",
+   "bio": "Agneta is retired in Uppsala and looks after her grandchildren weekly. She uses a tablet at the kitchen table with large text and takes her time with forms. She wants to order the black T-shirt as a birthday gift for her grandson and have it sent to her home to wrap. She reads everything line by line and worries about pressing the wrong button.",
+   "why": "Older gift-buyer on a tablet is exactly the less-confident user a cheap family clothing shop will get.",
+   "device": "tablet",
+   "eyes": {
+    "blur": 2.0,
+    "contrast": 0.75,
+    "brightness": 1.05,
+    "tint": [
+     1.0,
+     0.93,
+     0.7
+    ]
+   },
+   "eyes_note": "Cloudy yellowed vision from cataracts, small text is a smudge",
+   "hands": {
+    "tremor": 6.0
+   },
+   "details": {
+    "first_name": "Agneta",
+    "last_name": "Lindqvist",
+    "address": "Storgatan 8",
+    "city": "Uppsala",
+    "postal_code": "753 31",
+    "country": "Sweden",
+    "phone": "+46 70 555 083"
+   }
+  },
+  {
+   "id": "carlos",
+   "name": "Carlos",
+   "age": 37,
+   "tag": "office worker replacing tee",
+   "bio": "Carlos works in admin for a logistics firm in Madrid and uses a laptop all day. He orders clothes online a few times a year and prefers to pay by card quickly at lunch. He needs a new black T-shirt in M because his old ones are worn out. He uses the menu and search and only skims English, relying on pictures, sizes and prices.",
+   "why": "Employed man restocking basics on a work laptop, shopping in English as a second language, matches the cross-Europe audience.",
+   "device": "laptop",
+   "eyes": {},
+   "eyes_note": "",
+   "hands": {
+    "tremor": 0
+   },
+   "details": {
+    "first_name": "Carlos",
+    "last_name": "Garcia",
+    "address": "Calle Mayor 15, 2B",
+    "city": "Madrid",
+    "postal_code": "28013",
+    "country": "Spain",
+    "phone": "+34 612 555 095"
+   }
+  },
+  {
+   "id": "mikkel",
+   "name": "Mikkel",
+   "age": 30,
+   "tag": "electrician in a rush",
+   "bio": "Mikkel is an electrician in Odense and does most shopping on his phone between jobs. He is confident with technology but impatient and rarely reads help text. He is buying the T-shirt for himself after a friend recommended the shop. He picks colour and size by the swatches and images and expects checkout to take two minutes.",
+   "why": "Young tradesman buying quickly on mobile is a core low-price basics shopper in Denmark.",
+   "device": "phone",
+   "eyes": {
+    "colour": "deuteranopia"
+   },
+   "eyes_note": "Red-green colour blindness, red and green look similar",
+   "hands": {
+    "tremor": 0
+   },
+   "details": {
+    "first_name": "Mikkel",
+    "last_name": "Jensen",
+    "address": "Norregade 12, st",
+    "city": "Odense C",
+    "postal_code": "5000",
+    "country": "Denmark",
+    "phone": "+45 28 555 034"
+   }
+  },
+  {
+   "id": "emre",
+   "name": "Emre",
+   "age": 29,
+   "tag": "new to English shops",
+   "bio": "Emre moved to Berlin three years ago and works in a restaurant kitchen. His German is good but his English is basic and he usually shops on Turkish or German sites on his phone. He is here because his cousin sent him the link to the Medusa shirt. He translates in his head, goes slowly, and double-checks address and payment steps.",
+   "why": "Migrant shopper with limited English using a phone is plausibly part of this pan-European general public.",
+   "device": "phone",
+   "eyes": {},
+   "eyes_note": "",
+   "hands": {
+    "tremor": 0
+   },
+   "details": {
+    "first_name": "Emre",
+    "last_name": "Yilmaz",
+    "address": "Kottbusser Damm 24",
+    "city": "Berlin",
+    "postal_code": "10967",
+    "country": "Germany",
+    "phone": "+49 176 555 028"
+   }
+  }
+ ]
+}

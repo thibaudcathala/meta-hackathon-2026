@@ -1,4 +1,4 @@
-"""Command line: python -m footfall {crowd,ledger} ..."""
+"""Command line: python -m footfall {recruit,crowd,insights,wall,ledger} ..."""
 
 import argparse
 import json
@@ -15,8 +15,10 @@ LEDGER = Path("runs/ledger.jsonl")
 PERSONAS = Path(__file__).with_name("personas.json")
 
 
-def load_personas(names):
-    every = json.loads(PERSONAS.read_text())
+def load_personas(names, crowd_file=None):
+    every = json.loads(Path(crowd_file or PERSONAS).read_text())
+    if isinstance(every, dict):  # a recruited crowd: audience notes around the personas
+        every = every["personas"]
     if names == "all":
         return every
     wanted = names.split(",")
@@ -33,7 +35,7 @@ def cmd_crowd(args):
         sys.exit("no usable budget: set FOOTFALL_BUDGET_USD (paid calls are refused)")
     print(f"budget ${ledger.budget:.2f}, spent ${ledger.spent():.4f}, usable ${ledger.remaining():.4f}")
     scenario = json.loads(Path(args.scenario).read_text())
-    personas = load_personas(args.personas)
+    personas = load_personas(args.personas, args.crowd)
     run_id = time.strftime("%Y%m%d-%H%M%S")
     out = Path("runs") / f"{run_id}-crowd"
     client = MetaClient(HttpBackend(), ledger)
@@ -43,7 +45,7 @@ def cmd_crowd(args):
 
     def one(persona):
         session = Session(client, persona, scenario, out / persona["id"], model=args.model,
-                          size=tuple(args.size), effort=args.effort, run_id=run_id,
+                          size=args.size, effort=args.effort, run_id=run_id,
                           max_turns=args.max_turns)
         try:
             return session()
@@ -54,6 +56,7 @@ def cmd_crowd(args):
     with ThreadPoolExecutor(args.parallel) as pool:
         results = list(pool.map(one, personas))
     summary = {"scenario": scenario["name"], "scenario_file": args.scenario,
+               "crowd_file": args.crowd, "personas": personas,
                "url": scenario["url"], "model": args.model,
                "results": results, "cost_usd": round(ledger.spent() - spent0, 4)}
     (out / "crowd.json").write_text(json.dumps(summary, indent=1))
@@ -64,6 +67,24 @@ def cmd_crowd(args):
               f"{r.get('message', '')[:90]}")
     ok = sum(bool(r.get("verified")) for r in results)
     print(f"\n{ok}/{len(results)} reached the goal, cost ${summary['cost_usd']:.4f}")
+
+
+def cmd_recruit(args):
+    from . import recruit
+    scenario = json.loads(Path(args.scenario).read_text())
+    client = MetaClient(HttpBackend(), Ledger(LEDGER))
+    crowd = recruit.recruit(client, scenario, count=args.count, audience=args.audience,
+                            model=args.model)
+    out = Path(args.out or Path("crowds") / f"{Path(args.scenario).stem}.json")
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps(crowd, indent=1, ensure_ascii=False))
+    print(crowd["audience"], "\n")
+    for p in crowd["personas"]:
+        senses = ", ".join(filter(None, [p.get("eyes_note"), p["hands"]["tremor"] and
+                                         f"tremor {p['hands']['tremor']:g}px"]))
+        print(f"{p['name']:<10} {p['age']:>3}  {p['tag']}" + (f"  [{senses}]" if senses else ""))
+        print(f"{'':15}{p.get('why', '')}")
+    print(f"\n{out}: read and edit it, then run: crowd {args.scenario} --crowd {out}")
 
 
 def cmd_wall(args):
@@ -108,13 +129,21 @@ def main():
     sub = parser.add_subparsers(dest="cmd", required=True)
     c = sub.add_parser("crowd", help="send personas through a scenario in real browsers")
     c.add_argument("scenario")
+    c.add_argument("--crowd", help="a recruited crowd file (default: footfall/personas.json)")
     c.add_argument("--personas", default="all", help="comma-separated ids, or all")
     c.add_argument("--model", default="muse-spark-1.3")
     c.add_argument("--parallel", type=int, default=2)
     c.add_argument("--effort", default="low")
     c.add_argument("--max-turns", type=int, default=60, help="cost ceiling per persona")
-    c.add_argument("--size", type=int, nargs=2, default=[1280, 800])
+    c.add_argument("--size", type=int, nargs=2, help="override every persona's device screen")
     c.set_defaults(func=cmd_crowd)
+    r = sub.add_parser("recruit", help="recruit a crowd that fits the site's real audience")
+    r.add_argument("scenario")
+    r.add_argument("--count", type=int, default=8)
+    r.add_argument("--audience", help="the owner's own words about who uses the site")
+    r.add_argument("--model", default="muse-spark-1.3")
+    r.add_argument("--out", help="default: crowds/<scenario>.json")
+    r.set_defaults(func=cmd_recruit)
     w = sub.add_parser("wall", help="one video with every persona's screen, as they saw it")
     w.add_argument("crowd", help="a runs/<time>-crowd directory")
     w.add_argument("--seconds", type=int, default=45)

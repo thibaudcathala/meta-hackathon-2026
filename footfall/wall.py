@@ -54,7 +54,7 @@ def verdict(result):
 def build(crowd_dir, out=None, seconds=45):
     crowd_dir = Path(crowd_dir)
     summary = json.loads((crowd_dir / "crowd.json").read_text())
-    personas = {p["id"]: p for p in json.loads(
+    personas = {p["id"]: p for p in summary.get("personas") or json.loads(
         Path(__file__).with_name("personas.json").read_text())}
     tiles = [r for r in summary["results"] if (crowd_dir / r["persona"] / "screen.mp4").exists()]
     cols = math.ceil(math.sqrt(len(tiles) * 16 / 9 / 1.6))
@@ -77,9 +77,10 @@ def build(crowd_dir, out=None, seconds=45):
             badge = text_file(tmp, f"{i}-badge.txt", label)
             sight = ",".join(eyes_filter(p.get("eyes", {})))
             chains.append(
-                f"[{i}:v]setpts=(PTS-STARTPTS)/{speed:.4f},scale={tw}:{vh}"
+                f"[{i}:v]setpts=(PTS-STARTPTS)/{speed:.4f},"
+                f"scale={tw}:{vh}:force_original_aspect_ratio=decrease:force_divisible_by=2"
                 + (f",{sight}" if sight else "")
-                + f",tpad=stop_mode=clone:stop_duration={seconds + 3},trim=0:{seconds + 2},"
+                + f",pad={tw}:{vh}:(ow-iw)/2:(oh-ih)/2:color=0x111418,tpad=stop_mode=clone:stop_duration={seconds + 3},trim=0:{seconds + 2},"
                 f"pad={tw}:{th}:0:48:color=0x111418,"
                 f"drawtext=fontfile={BOLD}:textfile={name}:x=12:y=10:fontsize=22:fontcolor=white,"
                 f"drawtext=fontfile={FONT}:textfile={note}:x=12:y=34:fontsize=12:fontcolor=0x8b95a5,"
