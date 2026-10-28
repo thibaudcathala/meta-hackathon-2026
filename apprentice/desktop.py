@@ -237,10 +237,12 @@ class VirtualDesktop:
     def execute(self, action):
         """Run one action of the Meta computer tool vocabulary."""
         kind = action["type"]
+        # A click without coordinates clicks where the pointer is (e.g. to confirm a G move).
+        x, y = action.get("x", self.pointer[0]), action.get("y", self.pointer[1])
         if kind == "click":
-            self.click(action["x"], action["y"], action.get("button", "left"))
+            self.click(x, y, action.get("button", "left"))
         elif kind == "double_click":
-            self.click(action["x"], action["y"], count=2)
+            self.click(x, y, count=2)
         elif kind == "drag":
             self.drag(action["path"])
         elif kind == "move":

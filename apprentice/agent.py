@@ -180,15 +180,21 @@ class Apprentice:
                 self.run.event("safety_check", step=step_id, checks=checks, acked=ok)
                 if not ok:
                     return response, f"stopped: safety check {[c.get('code') for c in checks]}"
-            for action in call["actions"]:
-                self.desktop.execute(action)
+            failed = []
+            for i, action in enumerate(call["actions"]):
+                try:
+                    self.desktop.execute(action)
+                except (KeyError, TypeError, ValueError) as exc:
+                    failed.append(f"action {i} {json.dumps(action)} was not run: {exc!r}")
+                    break  # the rest assumed this one happened
             self.desktop.settle()
             png = self.desktop.screenshot()
             self.run.event("actions", step=step_id, turn=turn, actions=call["actions"],
-                           shot=self.run.shot(png, f"{step_id}-t{turn}"))
+                           failed=failed, shot=self.run.shot(png, f"{step_id}-t{turn}"))
             if call["kind"] == "function":
                 reply = [{"type": "function_call_output", "call_id": call["call_id"],
-                          "output": "Done. The screen after your actions follows."},
+                          "output": "; ".join(failed) if failed else
+                                    "Done. The screen after your actions follows."},
                          {"role": "user", "content": [image(png)]}]
             else:
                 reply = [{"type": "computer_call_output", "call_id": call["call_id"],
