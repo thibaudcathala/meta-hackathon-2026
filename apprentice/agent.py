@@ -6,9 +6,12 @@ teacher's remark and it tries again (optionally from the rewound checkpoint).
 """
 
 import base64
+import io
 import json
 import time
 from pathlib import Path
+
+from PIL import Image
 
 from .meta import output_items, output_text
 from .verify import verify
@@ -30,12 +33,29 @@ Do only the current step, then stop and reply with one short sentence saying wha
 not claim it is done unless the screenshot shows it. If it cannot be done, say why."""
 
 
+# Checks the harness may acknowledge on the user's behalf with --ack-safety: Blender runs on a
+# private display inside a sandbox, so a generic "confirm this action" is not a risk. Anything
+# else (e.g. suspected prompt injection) stops the step.
+ACKABLE = {"computer_action_requires_confirmation"}
+
+
 def data_url(png):
     return "data:image/png;base64," + base64.b64encode(png).decode()
 
 
 def image(png):
     return {"type": "input_image", "image_url": data_url(png)}
+
+
+def thumbnail(path, width=640):
+    """Tutorial frames go in small: they are a hint of the result, and a full-size frame of an
+    older UI got its coordinates mistaken for the live screen's (first Spark runs)."""
+    img = Image.open(path).convert("RGB")
+    img.thumbnail((width, width))
+    buf = io.BytesIO()
+    img.save(buf, "JPEG", quality=80)
+    return {"type": "input_image",
+            "image_url": "data:image/jpeg;base64," + base64.b64encode(buf.getvalue()).decode()}
 
 
 class Run:
@@ -69,13 +89,16 @@ class Run:
 
 class Apprentice:
     def __init__(self, client, desktop, app, run, model="muse-wonder-1.0", max_turns=30,
-                 max_attempts=3, rewind=False, ack_safety=False, version="5.2", say=print):
+                 max_attempts=3, rewind=False, ack_safety=False, version="5.2", frames=True,
+                 effort=None, say=print):
         self.client, self.desktop, self.app, self.run = client, desktop, app, run
         self.model = model
         self.max_turns = max_turns
         self.max_attempts = max_attempts
         self.rewind = rewind
         self.ack_safety = ack_safety
+        self.frames = frames
+        self.effort = effort
         self.instructions = SYSTEM.format(version=version)
         self.say = say
 
@@ -84,6 +107,8 @@ class Apprentice:
         payload = {"model": self.model, "instructions": self.instructions,
                    "tools": [{"type": "computer"}], "input": input_items,
                    "max_output_tokens": 8000}
+        if self.effort:
+            payload["reasoning"] = {"effort": self.effort}
         if previous:
             payload["previous_response_id"] = previous
         response = self.client.create(payload, tag=tag)
@@ -101,18 +126,19 @@ class Apprentice:
             call = calls[0]
             checks = call.get("pending_safety_checks") or []
             if checks:
-                self.run.event("safety_check", step=step_id, checks=checks, acked=self.ack_safety)
-                if not self.ack_safety:
+                ok = self.ack_safety and all(c.get("code") in ACKABLE for c in checks)
+                self.run.event("safety_check", step=step_id, checks=checks, acked=ok)
+                if not ok:
                     return response, f"stopped: safety check {[c.get('code') for c in checks]}"
             for action in call["actions"]:
                 self.desktop.execute(action)
-            time.sleep(0.4)
+            self.desktop.settle()
             png = self.desktop.screenshot()
             self.run.event("actions", step=step_id, turn=turn, actions=call["actions"],
                            shot=self.run.shot(png, f"{step_id}-t{turn}"))
             response = self.request([{
                 "type": "computer_call_output", "call_id": call["call_id"],
-                "acknowledged_safety_checks": checks if self.ack_safety else [],
+                "acknowledged_safety_checks": checks,
                 "output": {"type": "computer_screenshot", "image_url": data_url(png)},
             }], previous=response["id"], tag=step_id)
         return response, "stopped: turn budget reached"
@@ -124,10 +150,11 @@ class Apprentice:
                 f"Already done:\n{done or '  (nothing yet)'}\n\n"
                 f"STEP {step['id']} ({index + 1}/{len(tutorial['steps'])}): {step['instruction']}")
         content = [{"type": "input_text", "text": text}]
-        if step.get("frame"):
-            content += [{"type": "input_text", "text": "Frame from the tutorial video right after "
-                         "this step (reference only, its coordinates do not apply):"},
-                        image(Path(step["frame"]).read_bytes())]
+        if step.get("frame") and self.frames:
+            content += [{"type": "input_text", "text": "Small frame from the tutorial video right "
+                         "after this step. It may show an older Blender with a different layout: "
+                         "use it to see the intended result, never for coordinates."},
+                        thumbnail(step["frame"])]
         return content
 
     def do_step(self, tutorial, index):
@@ -148,7 +175,7 @@ class Apprentice:
 
         for attempt in range(1, self.max_attempts + 1):
             response, message = self.act(response, sid)
-            time.sleep(0.3)
+            self.desktop.settle()
             scene = self.app.scene()
             ok, results = verify(step["expect"], scene, before)
             errors = [r["error"] for r in results if r["error"]]

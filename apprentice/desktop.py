@@ -142,6 +142,22 @@ class VirtualDesktop:
                                         fill="white", outline="black")
         return img
 
+    def settle(self, quiet=0.3, timeout=4.0, min_wait=0.25):
+        """Wait until the screen stops changing (Blender can take a second to redraw, e.g. while
+        it compiles shaders on first entering a mode); a capture taken too early makes the
+        model think its action did nothing, and it repeats it."""
+        time.sleep(min_wait)
+        w, h = self.size
+        last, still, start = None, time.time(), time.time()
+        while time.time() - start < timeout:
+            data = self.root.get_image(0, 0, w, h, X.ZPixmap, 0xFFFFFFFF).data
+            if data != last:
+                last, still = data, time.time()
+            elif time.time() - still >= quiet:
+                return True
+            time.sleep(0.05)
+        return False
+
     def screenshot(self):
         buf = io.BytesIO()
         self.grab().save(buf, "PNG", optimize=False, compress_level=3)

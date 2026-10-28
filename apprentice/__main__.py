@@ -39,7 +39,7 @@ def cmd_run(args):
     client = MetaClient(backend, ledger)
     run = Run(Path("runs") / time.strftime(f"%Y%m%d-%H%M%S-{Path(args.tutorial).name}"))
     run.event("start", tutorial=args.tutorial, model=args.model, mock=args.mock,
-              size=list(args.size))
+              size=list(args.size), effort=args.effort, frames=not args.no_frames)
     print(f"run dir: {run.dir}")
 
     with VirtualDesktop(*args.size, log_dir=run.dir) as desktop:
@@ -48,7 +48,8 @@ def cmd_run(args):
             desktop.record(run.dir / "screen.mp4")
         agent = Apprentice(client, desktop, app, run, model=args.model, max_turns=args.max_turns,
                            max_attempts=args.attempts, rewind=args.rewind,
-                           ack_safety=args.ack_safety)
+                           ack_safety=args.ack_safety, frames=not args.no_frames,
+                           effort=args.effort)
         t0 = time.time()
         results = agent.run_tutorial(tut, only=args.steps and args.steps.split(","))
         final = app.scene()
@@ -117,7 +118,10 @@ def main(argv=None):
     r.add_argument("--attempts", type=int, default=3)
     r.add_argument("--rewind", action="store_true", help="reset the scene before a retry")
     r.add_argument("--ack-safety", action="store_true",
-                   help="acknowledge the API's safety checks (the app runs on a private display)")
+                   help="acknowledge generic action confirmations (the app is sandboxed on a "
+                        "private display); other safety checks still stop the step")
+    r.add_argument("--no-frames", action="store_true", help="do not show tutorial frames")
+    r.add_argument("--effort", choices=["low", "medium", "high"], help="reasoning effort")
     r.add_argument("--record", action="store_true", help="film the display to screen.mp4")
     r.add_argument("--size", type=size, default=(1280, 800))
     r.add_argument("--keep-open", action="store_true")
