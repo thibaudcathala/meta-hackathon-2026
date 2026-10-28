@@ -23,9 +23,9 @@ from . import store
 
 SYSTEM = """You are {name}, {age}. {bio}
 
-You are at your computer, using a real web browser. Each screenshot shows the screen exactly as
+You are {where}, using a real web browser. Each screenshot shows the screen exactly as
 you see it{eyes}. You act with the computer tool: mouse and keyboard, coordinates in pixels of
-the screenshot, (0, 0) at the top-left.
+the screenshot ({width}x{height}), (0, 0) at the top-left{tap}.
 
 Behave as {name} really would: your habits, your pace, your patience, your doubts. You are not a
 tester and you know nothing about how this website is built. Do not type web addresses; find
@@ -72,6 +72,20 @@ def change(before, after):
     return ""
 
 
+def unzoom(action, zoom):
+    """Screen coordinates for an action aimed on an enlarged screenshot."""
+    if zoom == 1:
+        return action
+    out = dict(action)
+    for key in ("x", "y"):
+        if key in out:
+            out[key] = round(out[key] / zoom)
+    if "path" in out:
+        out["path"] = [{"x": round(pt["x"] / zoom), "y": round(pt["y"] / zoom)}
+                       for pt in out["path"]]
+    return out
+
+
 def same(a, b, slack=25):
     """The same actions again, aimed at about the same place."""
     if not a or not b or len(a) != len(b):
@@ -88,6 +102,11 @@ class Session:
         self.dir = Path(out_dir)
         self.device = persona.get("device", "laptop")
         self.size = tuple(size or DEVICES.get(self.device, DEVICES["laptop"]))
+        # Spark aims badly on small images: on a 412x870 phone it clicked the colour row when it
+        # meant the size row below. Screens are sent enlarged to about 1300 pixels on the long
+        # side (as a phone's own pixel density would), and its coordinates scaled back.
+        self.zoom = max(1.0, 1300 / max(self.size))
+        self.sent_size = tuple(round(v * self.zoom) for v in self.size)
         self.model, self.record = model, record
         self.effort, self.say = effort, say
         self.max_turns = max_turns  # a cost ceiling; giving up is the persona's own call
@@ -103,7 +122,12 @@ class Session:
     def instructions(self):
         p = self.persona
         eyes = f" with your own eyes ({p['eyes_note']})" if p.get("eyes_note") else ""
-        return SYSTEM.format(name=p["name"], age=p["age"], bio=p["bio"], eyes=eyes)
+        where = {"phone": "on your phone", "tablet": "on your tablet"}.get(self.device,
+                                                                          "at your computer")
+        tap = "; a click is a tap of your finger" if self.device in ("phone", "tablet") else ""
+        w, h = self.sent_size
+        return SYSTEM.format(name=p["name"], age=p["age"], bio=p["bio"], eyes=eyes,
+                             where=where, tap=tap, width=w, height=h)
 
     def prompt(self):
         details = {**self.persona["details"], "email": self.email}
@@ -118,7 +142,7 @@ class Session:
         return "\n".join(lines)
 
     def ask(self, seen_png):
-        tools = ([computer_function(self.size)] if self.tool == "function"
+        tools = ([computer_function(self.sent_size)] if self.tool == "function"
                  else [{"type": "computer"}])
         payload = {"model": self.model, "instructions": self.instructions(), "tools": tools,
                    "max_output_tokens": 4000,
@@ -147,13 +171,13 @@ class Session:
     def act(self, call, turn):
         failed = []
         for i, action in enumerate(call["actions"]):
-            aimed = self.hands.aim(action)
+            aimed = self.hands.aim(unzoom(action, self.zoom))
             try:
                 self.desktop.execute(aimed)
             except (KeyError, TypeError, ValueError) as exc:
                 failed.append(f"{describe(action)} did not work ({exc})")
                 break
-            if aimed is not action:
+            if aimed != unzoom(action, self.zoom):
                 self.run.event("tremor", turn=turn, aimed=action, landed=aimed)
         return failed
 
@@ -177,7 +201,7 @@ class Session:
                     self.journal[-1] += " - " + noticed
             before = bare
             raw = self.desktop.screenshot()
-            seen = see_png(raw, p.get("eyes"))
+            seen = see_png(raw, p.get("eyes"), self.zoom)
             self.run.shot(raw, f"t{turn:02d}-screen")
             shot = self.run.shot(seen, f"t{turn:02d}-seen")
             response = self.ask(seen)

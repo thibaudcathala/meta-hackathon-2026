@@ -61,11 +61,15 @@ def see(img, eyes):
     return img
 
 
-def see_png(png, eyes):
-    if not eyes:
+def see_png(png, eyes, zoom=1.0):
+    """The PNG the model gets: degraded in screen pixels, then enlarged if `zoom` > 1."""
+    if not eyes and zoom == 1:
         return png
+    img = see(Image.open(io.BytesIO(png)).convert("RGB"), eyes)
+    if zoom != 1:
+        img = img.resize((round(img.width * zoom), round(img.height * zoom)), Image.LANCZOS)
     buf = io.BytesIO()
-    see(Image.open(io.BytesIO(png)).convert("RGB"), eyes).save(buf, "PNG", compress_level=3)
+    img.save(buf, "PNG", compress_level=3)
     return buf.getvalue()
 
 
