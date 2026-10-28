@@ -97,7 +97,7 @@ def same(a, b, slack=25):
                and abs(x.get("y", 0) - y.get("y", 0)) <= slack for x, y in zip(a, b))
 
 
-LOOK = """{name} is about to {action}. Their thought: "{thought}"
+LOOK = """{name} is about to {action}{then}. Their thought: "{thought}"
 
 The image is a close-up of {name}'s screen around that spot, enlarged {k}x, as they see it. The
 red cross marks exactly where the pointer is about to land. If it is on what they mean to
@@ -181,7 +181,7 @@ class Session:
                 self.funnel[stage["name"]] = turn
                 self.run.event("funnel", stage=stage["name"], turn=turn, url=url)
 
-    def look(self, action, thought, turn, half=90, k=3):
+    def look(self, action, thought, turn, then=None, half=130, k=3):
         """Closed-loop pointing: before a click lands, the persona looks at the spot, as people
         do while they move a mouse, and corrects its aim. The model alone points open-loop and
         misses small targets (dropdown rows, size buttons) by a row. The close-up is taken
@@ -199,7 +199,10 @@ class Session:
         d.line([(cx, cy - 14), (cx, cy + 14)], fill="red", width=3)
         buf = io.BytesIO()
         crop.save(buf, "PNG")
-        prompt = LOOK.format(name=self.persona["name"], action=describe(action),
+        # In a form the click's purpose is the text typed next: "Fischer" belongs in Last
+        # name, not in Company, though both are boxes of the same size side by side.
+        then = f", then {describe(then)}" if then and then.get("type") == "type" else ""
+        prompt = LOOK.format(name=self.persona["name"], action=describe(action), then=then,
                              thought=thought[:300], k=k)
         try:
             response = self.client.create({
@@ -219,9 +222,11 @@ class Session:
 
     def act(self, call, turn, thought=""):
         failed = []
-        for i, action in enumerate(call["actions"]):
-            meant = self.look(unzoom(action, self.zoom), thought, turn) if self.closed_loop \
-                else unzoom(action, self.zoom)
+        actions = call["actions"]
+        for i, action in enumerate(actions):
+            then = actions[i + 1] if i + 1 < len(actions) else None
+            meant = self.look(unzoom(action, self.zoom), thought, turn, then) \
+                if self.closed_loop else unzoom(action, self.zoom)
             aimed = self.hands.aim(meant)
             try:
                 self.desktop.execute(aimed)
