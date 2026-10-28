@@ -78,7 +78,7 @@ you can read. The scenario in `scenarios/` targets Medusa's `dtc-starter` runnin
 (storefront on :8000, Postgres on :5442; `FOOTFALL_STORE_DB` points elsewhere).
 
 ```sh
-python3 -m venv .venv && .venv/bin/pip install httpx python-xlib pillow
+python3 -m venv .venv && .venv/bin/pip install httpx python-xlib pillow websocket-client
 .venv/bin/python -m unittest discover -s tests -t .
 
 export MODEL_API_KEY=...

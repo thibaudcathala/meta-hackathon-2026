@@ -52,12 +52,19 @@ def describe(action):
     return f"{kind}{where}"
 
 
+# Screen sizes in CSS pixels. A phone or tablet is a narrow Chrome window with a mobile user
+# agent: the site serves its mobile layout, and the persona still clicks rather than taps.
+DEVICES = {"phone": (412, 870), "tablet": (820, 1100), "laptop": (1280, 800)}
+
+
 class Session:
-    def __init__(self, client, persona, scenario, out_dir, model="muse-spark-1.3", size=(1280, 800),
+    def __init__(self, client, persona, scenario, out_dir, model="muse-spark-1.3", size=None,
                  record=True, effort="low", say=print, run_id=None, max_turns=60):
         self.client, self.persona, self.scenario = client, persona, scenario
         self.dir = Path(out_dir)
-        self.model, self.size, self.record = model, size, record
+        self.device = persona.get("device", "laptop")
+        self.size = tuple(size or DEVICES.get(self.device, DEVICES["laptop"]))
+        self.model, self.record = model, record
         self.effort, self.say = effort, say
         self.max_turns = max_turns  # a cost ceiling; giving up is the persona's own call
         self.tool = tool_mode(model)
@@ -192,10 +199,13 @@ class Session:
         self.dir.mkdir(parents=True, exist_ok=True)
         with VirtualDesktop(*self.size, log_dir=self.dir) as desktop:
             self.desktop = desktop
-            self.browser = Browser(desktop, self.scenario["url"]).launch()
+            self.browser = Browser(desktop, self.scenario["url"],
+                                   mobile=self.device in ("phone", "tablet")).launch()
             try:
                 if not self.browser.wait_loaded():
                     raise RuntimeError("the site did not load")
+                if self.device == "phone":
+                    self.browser.emulate()
                 if self.record:
                     desktop.record(self.dir / "screen.mp4")
                     self.run.event("record_start")

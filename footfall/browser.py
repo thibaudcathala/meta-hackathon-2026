@@ -2,6 +2,11 @@
 
 The persona only sees pixels and acts with mouse and keyboard. The harness reads the current
 URL through the DevTools HTTP endpoint (read-only) to follow progress through the funnel.
+
+Chrome will not shrink its window below about 500 pixels, so a phone is emulated through
+DevTools instead: the page gets a phone-sized viewport, touch and a mobile user agent, and the
+private display is cut to the phone's width. The DevTools connection stays open for the whole
+session, since Chrome drops the emulation when it closes.
 """
 
 import json
@@ -10,9 +15,13 @@ import socket
 import tempfile
 import time
 import urllib.request
+
+import websocket
 from pathlib import Path
 
 CHROME = shutil.which("google-chrome") or shutil.which("chromium") or "google-chrome"
+MOBILE_UA = ("Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) "
+             "Chrome/130.0.0.0 Mobile Safari/537.36")
 
 
 def free_port():
@@ -22,8 +31,8 @@ def free_port():
 
 
 class Browser:
-    def __init__(self, desktop, url):
-        self.desktop, self.start_url = desktop, url
+    def __init__(self, desktop, url, mobile=False):
+        self.desktop, self.start_url, self.mobile = desktop, url, mobile
         self.port = free_port()
         self.profile = tempfile.mkdtemp(prefix="footfall-chrome-")
 
@@ -44,8 +53,28 @@ class Browser:
             "--disable-features=Translate,MediaRouter,OptimizationHints",
             "--password-store=basic", "--disable-session-crashed-bubble",
             "--window-position=0,0", f"--window-size={w},{h}", "--force-device-scale-factor=1",
+            *([f"--user-agent={MOBILE_UA}", "--touch-events=enabled"] if self.mobile else []),
             self.start_url], "chrome.log")
         return self
+
+    def emulate(self, chrome_height=88):
+        """Give the page the screen's size as a mobile viewport (call once it has loaded)."""
+        w, h = self.desktop.size
+        with urllib.request.urlopen(f"http://127.0.0.1:{self.port}/json/list", timeout=5) as r:
+            page = next(p for p in json.load(r) if p.get("type") == "page")
+        self.devtools = websocket.create_connection(page["webSocketDebuggerUrl"], timeout=10)
+        for i, (method, params) in enumerate([
+                ("Emulation.setDeviceMetricsOverride", {"width": w, "height": h - chrome_height,
+                                                        "deviceScaleFactor": 1, "mobile": True}),
+                ("Emulation.setTouchEmulationEnabled", {"enabled": True, "maxTouchPoints": 5}),
+                ("Emulation.setEmitTouchEventsForMouse", {"enabled": True,
+                                                          "configuration": "mobile"}),
+                ("Page.reload", {})]):
+            self.devtools.send(json.dumps({"id": i + 1, "method": method, "params": params}))
+            while json.loads(self.devtools.recv()).get("id") != i + 1:
+                pass
+        time.sleep(1)
+        self.desktop.settle(quiet=1.0, timeout=15)
 
     def url(self):
         try:
@@ -66,6 +95,8 @@ class Browser:
         return False
 
     def close(self):
+        if getattr(self, "devtools", None):
+            self.devtools.close()
         if getattr(self, "proc", None) and self.proc.poll() is None:
             self.proc.terminate()
             try:
