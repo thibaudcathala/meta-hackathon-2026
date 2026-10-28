@@ -92,6 +92,12 @@ def cmd_ledger(args):
     real = [e for e in ledger.entries() if not e.get("mock")]
     print(f"budget ${ledger.budget:.2f} (APPRENTICE_BUDGET_USD), margin ${ledger.margin:.2f}")
     print(f"real calls {len(real)}, spent ${ledger.spent():.4f}, usable ${ledger.remaining():.4f}")
+    by_model = {}
+    for e in real:
+        calls, cost = by_model.get(e["model"], (0, 0.0))
+        by_model[e["model"]] = (calls + 1, cost + e["cost_usd"])
+    for model, (calls, cost) in sorted(by_model.items()):
+        print(f"  {model:<28} {calls:>4} calls  ${cost:.4f}")
 
 
 def cmd_report(args):
