@@ -15,9 +15,9 @@ A step carries a list of checks, small JSON objects the tutorial reader writes:
 eq, approx (+tol), gte or lte, and so does `distance` (between object origins; `to` is an object
 or an [x, y, z] point); a path is dot-separated, and "modifiers[BEVEL]" picks a list
 entry by type or name. Object paths: location, rotation_euler, scale, dimensions (x, y, z
-lists), mesh.vertices, mesh.faces, mesh.smooth_fraction, modifiers[TYPE].<Python API property>,
-materials.0.<base_color|metallic|roughness>, light.energy, camera.lens. Scene paths: mode,
-active, render_engine, frame, camera, world_color.
+lists), size (largest dimension, for when the direction does not matter), mesh.vertices, mesh.faces, mesh.smooth_fraction, modifiers[TYPE].<Python API property>,
+materials.0.<base_color|metallic|roughness>, light.energy, camera.lens. Scene paths: mode
+(OBJECT, EDIT, SCULPT...), active, render_engine, frame, camera, world_color.
 """
 
 import fnmatch

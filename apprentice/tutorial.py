@@ -16,41 +16,6 @@ from .meta import output_text
 # Generous estimate for the pre-call budget check; Spark samples frames plus the audio track.
 VIDEO_TOKENS_PER_SECOND = 400
 
-CHECK_SCHEMA = {
-    "type": "object",
-    "properties": {
-        "op": {"type": "string", "enum": ["exists", "absent", "count", "modifier", "material", "prop",
-                                         "distance"]},
-        "to": {},
-        "object": {"type": "string"}, "type": {"type": "string"}, "name": {"type": "string"},
-        "path": {"type": "string"}, "props": {"type": "object"},
-        "eq": {}, "approx": {}, "tol": {"type": "number"},
-        "gte": {"type": "number"}, "lte": {"type": "number"},
-        "base_color": {"type": "array", "items": {"type": "number"}},
-        "metallic": {"type": "number"}, "roughness": {"type": "number"},
-    },
-    "required": ["op"],
-}
-
-TUTORIAL_SCHEMA = {
-    "type": "object",
-    "properties": {
-        "title": {"type": "string"},
-        "goal": {"type": "string"},
-        "steps": {"type": "array", "items": {
-            "type": "object",
-            "properties": {
-                "id": {"type": "string"},
-                "t": {"type": "number", "description": "seconds into the video where the result of the step is visible"},
-                "instruction": {"type": "string"},
-                "expect": {"type": "array", "items": CHECK_SCHEMA},
-            },
-            "required": ["id", "t", "instruction", "expect"],
-        }},
-    },
-    "required": ["title", "goal", "steps"],
-}
-
 INGEST_PROMPT = """You are watching a Blender tutorial video. Turn it into a list of small steps
 that someone could redo in Blender {version} starting from the default scene (cube, light,
 camera), using only the GUI.
@@ -63,10 +28,16 @@ For each step give:
 - expect: checks that a program reading the scene through Blender's Python API can use to prove
   the step was done. Use only these forms:
 {dsl}
-Only write checks for things the video makes certain. Prefer "@active" or "@new" for objects
+Only write checks for things the video makes certain; when a direction or an exact value is
+not stated, check something that holds whichever way it is done (size, distance, gte). Prefer "@active" or "@new" for objects
 whose final name you cannot see. Lengths are metres, angles radians, colours linear RGB 0..1.
 
-Skip intros, talk and camera moves that do not change the scene."""
+Skip intros, talk and camera moves that do not change the scene.
+
+Reply with JSON only, no prose and no code fence, shaped like:
+{{"title": "...", "goal": "one sentence",
+  "steps": [{{"id": "s1", "t": 8.0, "instruction": "...",
+             "expect": [{{"op": "exists", "type": "MESH", "name": "Sphere*"}}]}}]}}"""
 
 
 def load(path):
@@ -97,7 +68,11 @@ def extract_frames(video, steps, out_dir):
 
 
 def ingest(client, http, video, out_dir, model="muse-spark-1.3", version="5.2"):
-    """Video -> tutorial directory. Costs one Spark call; refused by the guard if over budget."""
+    """Video -> tutorial directory. Costs one Spark call; refused by the guard if over budget.
+
+    The answer is plain JSON: with a json_schema response format Spark 1.3 fell into a loop
+    (the same step repeated, keys such as "eq ").
+    """
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
     seconds = duration(video)
@@ -106,13 +81,13 @@ def ingest(client, http, video, out_dir, model="muse-spark-1.3", version="5.2"):
     response = client.create({
         "model": model,
         "max_output_tokens": 16000,
-        "text": {"format": {"type": "json_schema", "name": "tutorial", "schema": TUTORIAL_SCHEMA}},
         "input": [{"type": "message", "role": "user", "content": [
             {"type": "input_text", "text": INGEST_PROMPT.format(version=version, dsl=dsl)},
             {"type": "input_file", "file_id": uploaded["id"]},
         ]}],
     }, tag="ingest", extra_input_tokens=int(seconds * VIDEO_TOKENS_PER_SECOND))
     text = output_text(response)
+    (out / "raw.txt").write_text(text)
     tut = json.loads(text[text.find("{"):text.rfind("}") + 1])
     tut.update(app="blender", source={"video": str(video), "file_id": uploaded["id"],
                                       "duration": seconds, "model": model})

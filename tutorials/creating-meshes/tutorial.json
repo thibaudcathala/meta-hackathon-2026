@@ -19,11 +19,11 @@
     {"id": "s4", "t": 40, "instruction": "Move the monkey away from the cube with G.",
      "expect": [{"op": "distance", "object": "Suzanne*", "to": "Cube", "gte": 2.5}]},
     {"id": "s5", "t": 48, "instruction": "Select the cube and switch to Edit Mode (Tab).",
-     "expect": [{"op": "prop", "path": "active", "eq": "Cube"}, {"op": "prop", "path": "mode", "eq": "EDIT_MESH"}]},
+     "expect": [{"op": "prop", "path": "active", "eq": "Cube"}, {"op": "prop", "path": "mode", "eq": "EDIT"}]},
     {"id": "s6", "t": 74, "instruction": "Still in Edit Mode, add a UV sphere: it becomes part of the cube's mesh, not a new object.",
      "expect": [{"op": "prop", "object": "Cube", "path": "mesh.vertices", "eq": 490}, {"op": "count", "type": "MESH", "eq": 3}]},
-    {"id": "s7", "t": 80, "instruction": "Move the new sphere geometry up above the cube with G then Z.",
-     "expect": [{"op": "prop", "object": "Cube", "path": "dimensions.2", "gte": 4.0}]},
+    {"id": "s7", "t": 80, "instruction": "Move the new sphere geometry out of the cube with G.",
+     "expect": [{"op": "prop", "object": "Cube", "path": "size", "gte": 4.0}]},
     {"id": "s8", "t": 95, "instruction": "Go back to Object Mode (Tab): the cube object now contains both shapes.",
      "expect": [{"op": "prop", "path": "mode", "eq": "OBJECT"}, {"op": "prop", "object": "Cube", "path": "mesh.vertices", "eq": 490}, {"op": "count", "type": "MESH", "eq": 3}]}
   ]

@@ -68,7 +68,8 @@ def material_state(mat):
 def object_state(ob):
     state = {"name": ob.name, "type": ob.type, "location": clean(ob.location),
              "rotation_euler": clean(ob.rotation_euler), "scale": clean(ob.scale),
-             "dimensions": clean(ob.dimensions), "parent": ob.parent.name if ob.parent else None,
+             "dimensions": clean(ob.dimensions), "size": clean(max(ob.dimensions)),
+             "parent": ob.parent.name if ob.parent else None,
              "selected": ob.select_get(), "visible": ob.visible_get(),
              "modifiers": [{"name": m.name, "type": m.type, **rna_props(m)} for m in ob.modifiers],
              "materials": [material_state(s.material) for s in ob.material_slots if s.material]}
@@ -97,7 +98,9 @@ def scene_state():
         node = world.node_tree.nodes.get("Background")
         bg = socket_value(node, "Color") if node else None
     active = ctx.view_layer.objects.active
-    return {"file": bpy.data.filepath, "mode": ctx.mode, "active": active.name if active else None,
+    # "mode" is the active object's mode (OBJECT, EDIT, SCULPT...), as tutorials name it.
+    return {"file": bpy.data.filepath, "mode": active.mode if active else "OBJECT",
+            "context_mode": ctx.mode, "active": active.name if active else None,
             "render_engine": scene.render.engine, "frame": scene.frame_current,
             "camera": scene.camera.name if scene.camera else None, "world_color": bg,
             "objects": [object_state(ob) for ob in scene.objects]}
