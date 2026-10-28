@@ -65,8 +65,8 @@ python3 -m venv .venv && .venv/bin/pip install httpx python-xlib pillow
 
 # hosted models: paid calls are refused unless a budget is set
 export MODEL_API_KEY=...
-APPRENTICE_BUDGET_USD=20 .venv/bin/python -m apprentice ingest tutorial.mp4 tutorials/mine
-APPRENTICE_BUDGET_USD=20 .venv/bin/python -m apprentice run tutorials/mine --record
+FOOTFALL_BUDGET_USD=20 .venv/bin/python -m apprentice ingest tutorial.mp4 tutorials/mine
+FOOTFALL_BUDGET_USD=20 .venv/bin/python -m apprentice run tutorials/mine --record
 .venv/bin/python -m apprentice ledger
 .venv/bin/python -m apprentice montage runs/<run> tutorial.mp4
 ```

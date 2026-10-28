@@ -6,13 +6,15 @@ import sys
 import time
 from pathlib import Path
 
+from footfall.budget import Ledger
+from footfall.computer import Run
+from footfall.desktop import VirtualDesktop
+from footfall.meta import HttpBackend, MetaClient, ScriptedBackend
+
 from . import montage, report
 from . import tutorial as tutorials
-from .agent import Apprentice, Run
+from .agent import Apprentice
 from .blender import Blender
-from .budget import Ledger
-from .desktop import VirtualDesktop
-from .meta import HttpBackend, MetaClient, ScriptedBackend
 
 LEDGER = Path("runs/ledger.jsonl")
 
@@ -35,7 +37,7 @@ def cmd_run(args):
         print(f"budget ${ledger.budget:.2f}, spent ${ledger.spent():.4f}, "
               f"usable ${ledger.remaining():.4f}")
         if ledger.remaining() <= 0:
-            sys.exit("no usable budget: set APPRENTICE_BUDGET_USD (paid calls are refused)")
+            sys.exit("no usable budget: set FOOTFALL_BUDGET_USD (paid calls are refused)")
     client = MetaClient(backend, ledger)
     run = Run(Path("runs") / time.strftime(f"%Y%m%d-%H%M%S-{Path(args.tutorial).name}"))
     run.event("start", tutorial=args.tutorial, model=args.model, mock=args.mock,
@@ -90,7 +92,7 @@ def cmd_frames(args):
 def cmd_ledger(args):
     ledger = Ledger(LEDGER)
     real = [e for e in ledger.entries() if not e.get("mock")]
-    print(f"budget ${ledger.budget:.2f} (APPRENTICE_BUDGET_USD), margin ${ledger.margin:.2f}")
+    print(f"budget ${ledger.budget:.2f} (FOOTFALL_BUDGET_USD), margin ${ledger.margin:.2f}")
     print(f"real calls {len(real)}, spent ${ledger.spent():.4f}, usable ${ledger.remaining():.4f}")
     by_model = {}
     for e in real:

@@ -12,8 +12,8 @@ from PIL import Image, ImageDraw
 import copy
 import json
 
-from .agent import COMPUTER_FUNCTION, data_url, image
-from .meta import output_items
+from footfall.computer import COMPUTER_FUNCTION, data_url, image
+from footfall.meta import output_items
 
 SPOTS = [(0.2, 0.25), (0.8, 0.3), (0.35, 0.8), (0.7, 0.7)]
 

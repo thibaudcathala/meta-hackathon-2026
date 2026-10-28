@@ -6,8 +6,9 @@ from unittest import mock
 
 from PIL import Image
 
-from apprentice.agent import Apprentice, Run
-from apprentice.meta import ApiError
+from apprentice.agent import Apprentice
+from footfall.computer import Run
+from footfall.meta import ApiError
 
 LOST = '{"error":{"message":"referenced response not found or expired"}}'
 

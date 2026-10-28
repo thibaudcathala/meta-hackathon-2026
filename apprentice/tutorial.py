@@ -11,7 +11,7 @@ import subprocess
 from pathlib import Path
 
 from . import verify
-from .meta import output_text
+from footfall.meta import output_text
 
 # Generous estimate for the pre-call budget check; Spark samples frames plus the audio track.
 VIDEO_TOKENS_PER_SECOND = 400

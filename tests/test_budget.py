@@ -2,8 +2,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from apprentice.budget import BudgetExceeded, Ledger, Usage
-from apprentice.meta import MetaClient, ScriptedBackend
+from footfall.budget import BudgetExceeded, Ledger, Usage
+from footfall.meta import MetaClient, ScriptedBackend
 
 
 class NoNetwork:

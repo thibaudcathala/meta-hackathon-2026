@@ -4,7 +4,7 @@ Every real request is priced *before* it is sent (worst case: estimated input pl
 output allowance) and refused if it could push the total past the budget. After the call the
 real usage is written to an append-only JSONL ledger, which is the source of truth.
 
-The budget comes from APPRENTICE_BUDGET_USD and defaults to 0, so nothing is ever spent until
+The budget comes from FOOTFALL_BUDGET_USD and defaults to 0, so nothing is ever spent until
 someone sets it on purpose.
 """
 
@@ -61,7 +61,7 @@ class Ledger:
         self.path = Path(path)
         self.path.parent.mkdir(parents=True, exist_ok=True)
         if budget_usd is None:
-            budget_usd = float(os.environ.get("APPRENTICE_BUDGET_USD", "0"))
+            budget_usd = float(os.environ.get("FOOTFALL_BUDGET_USD", "0"))
         self.budget = budget_usd
         self.margin = margin_usd
         self._lock = threading.Lock()
