@@ -1,0 +1,47 @@
+{
+  "s1": [[
+    {"actions": [{"type": "move", "x": 520, "y": 420}, {"type": "keypress", "keys": ["F3"]}, {"type": "wait", "ms": 500}]},
+    {"actions": [{"type": "type", "text": "uv sphere"}, {"type": "wait", "ms": 700}]},
+    {"actions": [{"type": "keypress", "keys": ["Return"]}, {"type": "wait", "ms": 500}]},
+    {"say": "Added a UV sphere as a new object."}
+  ]],
+  "s2": [
+    [
+      {"actions": [{"type": "move", "x": 520, "y": 420}, {"type": "type", "text": "gx1"}, {"type": "keypress", "keys": ["Return"]}]},
+      {"say": "Moved the sphere along X."}
+    ],
+    [
+      {"actions": [{"type": "move", "x": 520, "y": 420}, {"type": "type", "text": "gx2"}, {"type": "keypress", "keys": ["Return"]}]},
+      {"say": "Moved it 2 m further along X, it no longer touches the cube."}
+    ]
+  ],
+  "s3": [[
+    {"actions": [{"type": "move", "x": 520, "y": 420}, {"type": "keypress", "keys": ["F3"]}, {"type": "wait", "ms": 500}]},
+    {"actions": [{"type": "type", "text": "monkey"}, {"type": "wait", "ms": 700}]},
+    {"actions": [{"type": "keypress", "keys": ["Return"]}, {"type": "wait", "ms": 500}]},
+    {"say": "Added a monkey."}
+  ]],
+  "s4": [[
+    {"actions": [{"type": "move", "x": 520, "y": 420}, {"type": "type", "text": "gy-3"}, {"type": "keypress", "keys": ["Return"]}]},
+    {"say": "Moved the monkey 3 m along -Y."}
+  ]],
+  "s5": [[
+    {"actions": [{"type": "click", "x": 1156, "y": 92}, {"type": "wait", "ms": 300}]},
+    {"actions": [{"type": "move", "x": 520, "y": 420}, {"type": "keypress", "keys": ["Tab"]}, {"type": "wait", "ms": 300}]},
+    {"say": "Selected the cube in the outliner and entered Edit Mode."}
+  ]],
+  "s6": [[
+    {"actions": [{"type": "move", "x": 520, "y": 420}, {"type": "keypress", "keys": ["F3"]}, {"type": "wait", "ms": 500}]},
+    {"actions": [{"type": "type", "text": "uv sphere"}, {"type": "wait", "ms": 700}]},
+    {"actions": [{"type": "keypress", "keys": ["Return"]}, {"type": "wait", "ms": 500}]},
+    {"say": "Added a UV sphere inside the cube's mesh."}
+  ]],
+  "s7": [[
+    {"actions": [{"type": "move", "x": 520, "y": 420}, {"type": "type", "text": "gz3"}, {"type": "keypress", "keys": ["Return"]}]},
+    {"say": "Moved the sphere geometry 3 m up."}
+  ]],
+  "s8": [[
+    {"actions": [{"type": "move", "x": 520, "y": 420}, {"type": "keypress", "keys": ["Tab"]}, {"type": "wait", "ms": 300}]},
+    {"say": "Back in Object Mode."}
+  ]]
+}

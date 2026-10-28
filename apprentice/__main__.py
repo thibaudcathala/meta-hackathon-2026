@@ -79,6 +79,12 @@ def cmd_ingest(args):
     print(json.dumps(tut, indent=2))
 
 
+def cmd_frames(args):
+    tut = json.loads((Path(args.tutorial) / "tutorial.json").read_text())
+    tutorials.extract_frames(args.video, tut["steps"], args.tutorial)
+    print(f"{len(tut['steps'])} frames in {Path(args.tutorial) / 'frames'}")
+
+
 def cmd_ledger(args):
     ledger = Ledger(LEDGER)
     real = [e for e in ledger.entries() if not e.get("mock")]
@@ -122,6 +128,11 @@ def main(argv=None):
     i.add_argument("out")
     i.add_argument("--model", default="muse-spark-1.3")
     i.set_defaults(func=cmd_ingest)
+
+    f = sub.add_parser("frames", help="cut each step's reference frame out of the video")
+    f.add_argument("video")
+    f.add_argument("tutorial")
+    f.set_defaults(func=cmd_frames)
 
     sub.add_parser("ledger", help="show spend against the budget").set_defaults(func=cmd_ledger)
 

@@ -1,0 +1,30 @@
+{
+  "title": "Creating Meshes (Blender 2.80 Fundamentals)",
+  "app": "blender",
+  "goal": "Learn the difference between adding a mesh in Object Mode (a new object) and in Edit Mode (more geometry inside the current object).",
+  "source": {
+    "kind": "hand-written answer key, to grade the steps Muse Spark extracts from the video",
+    "video": "https://studio.blender.org/training/blender-2-8-fundamentals/creating-meshes/",
+    "author": "Blender Studio",
+    "license": "CC BY 4.0",
+    "note": "The video uses Blender 2.80; the steps are written for the default scene of Blender 5.2 and keep going in one scene where the video restarts from a fresh file."
+  },
+  "steps": [
+    {"id": "s1", "t": 8, "instruction": "In Object Mode, add a UV sphere (Add > Mesh > UV Sphere). It becomes a new object.",
+     "expect": [{"op": "exists", "type": "MESH", "name": "Sphere*"}, {"op": "count", "type": "MESH", "eq": 2}]},
+    {"id": "s2", "t": 11, "instruction": "Move the sphere away from the cube with G so they no longer overlap.",
+     "expect": [{"op": "distance", "object": "Sphere*", "to": "Cube", "gte": 2.5}]},
+    {"id": "s3", "t": 36, "instruction": "Add a monkey (Add > Mesh > Monkey), another new object.",
+     "expect": [{"op": "exists", "type": "MESH", "name": "Suzanne*"}, {"op": "count", "type": "MESH", "eq": 3}]},
+    {"id": "s4", "t": 40, "instruction": "Move the monkey away from the cube with G.",
+     "expect": [{"op": "distance", "object": "Suzanne*", "to": "Cube", "gte": 2.5}]},
+    {"id": "s5", "t": 48, "instruction": "Select the cube and switch to Edit Mode (Tab).",
+     "expect": [{"op": "prop", "path": "active", "eq": "Cube"}, {"op": "prop", "path": "mode", "eq": "EDIT_MESH"}]},
+    {"id": "s6", "t": 74, "instruction": "Still in Edit Mode, add a UV sphere: it becomes part of the cube's mesh, not a new object.",
+     "expect": [{"op": "prop", "object": "Cube", "path": "mesh.vertices", "eq": 490}, {"op": "count", "type": "MESH", "eq": 3}]},
+    {"id": "s7", "t": 80, "instruction": "Move the new sphere geometry up above the cube with G then Z.",
+     "expect": [{"op": "prop", "object": "Cube", "path": "dimensions.2", "gte": 4.0}]},
+    {"id": "s8", "t": 95, "instruction": "Go back to Object Mode (Tab): the cube object now contains both shapes.",
+     "expect": [{"op": "prop", "path": "mode", "eq": "OBJECT"}, {"op": "prop", "object": "Cube", "path": "mesh.vertices", "eq": 490}, {"op": "count", "type": "MESH", "eq": 3}]}
+  ]
+}
