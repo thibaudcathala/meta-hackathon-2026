@@ -181,18 +181,25 @@ class Session:
                 self.funnel[stage["name"]] = turn
                 self.run.event("funnel", stage=stage["name"], turn=turn, url=url)
 
-    def look(self, action, thought, turn, then=None, half=130, k=3):
+    def look(self, action, thought, turn, then=None):
         """Closed-loop pointing: before a click lands, the persona looks at the spot, as people
-        do while they move a mouse, and corrects its aim. The model alone points open-loop and
-        misses small targets (dropdown rows, size buttons) by a row. The close-up is taken
-        through the persona's own eyes, so poor sight still makes poor corrections."""
+        do while they move a mouse, and corrects its aim. The model alone points open-loop: on
+        a phone it typed an email 140 pixels below the field and missed dropdown rows by one.
+        Two glances, like an eye homing in: a wide one finds the target, a close one centres
+        on it. Both are taken through the persona's own eyes, so poor sight still makes poor
+        corrections."""
         if action.get("type") not in ("click", "double_click") or "x" not in action:
             return action
+        for half, k in ((200, 2), (60, 4)):
+            action = self.glance(action, thought, turn, then, half, k)
+        return action
+
+    def glance(self, action, thought, turn, then, half, k):
         w, h = self.size
         x, y = action["x"], action["y"]
         box = (max(0, x - half), max(0, y - half), min(w, x + half), min(h, y + half))
         crop = see(self.desktop.grab(cursor=False), self.persona.get("eyes")).crop(box)
-        crop = crop.resize((crop.width * k, crop.height * k))
+        crop = crop.resize((round(crop.width * k), round(crop.height * k)))
         cx, cy = (x - box[0]) * k, (y - box[1]) * k
         d = ImageDraw.Draw(crop)
         d.line([(cx - 14, cy), (cx + 14, cy)], fill="red", width=3)
@@ -217,7 +224,7 @@ class Session:
             return action
         fixed = {**action, "x": round(box[0] + float(found["x"]) / k),
                  "y": round(box[1] + float(found["y"]) / k)}
-        self.run.event("look", turn=turn, aimed=[x, y], corrected=[fixed["x"], fixed["y"]])
+        self.run.event("look", turn=turn, zoom=k, aimed=[x, y], corrected=[fixed["x"], fixed["y"]])
         return fixed
 
     def act(self, call, turn, thought=""):
