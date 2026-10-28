@@ -182,8 +182,10 @@ class VirtualDesktop:
             time.sleep(dt)
 
     def click(self, x, y, button="left", count=1):
-        self.glide(x, y)
-        time.sleep(0.05)
+        # Jump, do not glide: a straight path through an open menu hovers other entries and
+        # Blender swaps the submenu under the cursor (seen on Add > Mesh > UV Sphere).
+        self.move(x, y)
+        time.sleep(0.12)
         code = BUTTONS[button]
         for _ in range(count):
             self._fake(X.ButtonPress, code)
@@ -200,7 +202,7 @@ class VirtualDesktop:
         self._fake(X.ButtonRelease, 1)
 
     def scroll(self, x, y, dx=0, dy=0):
-        self.glide(x, y)
+        self.move(x, y)
         for delta, neg, pos in ((dy, 4, 5), (dx, 6, 7)):
             for _ in range(min(abs(int(delta)) // 100 or (1 if delta else 0), 20)):
                 self._fake(X.ButtonPress, pos if delta > 0 else neg)
@@ -242,7 +244,8 @@ class VirtualDesktop:
         elif kind == "drag":
             self.drag(action["path"])
         elif kind == "move":
-            self.glide(action["x"], action["y"])
+            self.move(action["x"], action["y"])
+            time.sleep(0.12)
         elif kind == "scroll":
             self.scroll(action["x"], action["y"], action.get("scroll_x", 0),
                         action.get("scroll_y", 0))
