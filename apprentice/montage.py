@@ -7,6 +7,8 @@ import subprocess
 import tempfile
 from pathlib import Path
 
+from PIL import ImageFont
+
 FONT = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
 BOLD = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
 W, H = 1920, 1080
@@ -18,6 +20,13 @@ def text_file(tmp, name, text):
     path = Path(tmp) / name
     path.write_text(text)
     return str(path).replace(":", r"\:")
+
+
+def fit(text, font, size, width):
+    """Largest font size up to `size` at which `text` fits in `width` pixels."""
+    while size > 18 and ImageFont.truetype(font, size).getlength(text) > width:
+        size -= 1
+    return size
 
 
 def step_windows(run_dir):
@@ -61,8 +70,9 @@ def segment(tmp, i, total, step, tut_video, t0, t1, screen, w, label_left, label
     verdict = ("VERIFIED  " if ok else "NOT VERIFIED  ") + "  |  ".join(describe(c) for c in passed[:2])
     if attempts > 1:
         verdict += f"   (attempt {attempts})"
+    title = f"Step {i}/{total}   {step['instruction']}"
     files = {k: text_file(tmp, f"{i}-{k}.txt", v) for k, v in {
-        "title": f"Step {i}/{total}   {step['instruction']}",
+        "title": title,
         "left": label_left, "right": f"{label_right}   x{speed:.0f} speed",
         "verdict": verdict}.items()}
     pane_h = PANE_W * 10 // 16
@@ -73,10 +83,10 @@ def segment(tmp, i, total, step, tut_video, t0, t1, screen, w, label_left, label
         f"tpad=stop_mode=clone:stop_duration={dur:.3f},trim=0:{dur:.3f}[r];"
         f"color=c=0x111418:s={W}x{H}:d={dur:.3f}:r={FPS}[bg];"
         f"[bg][l]overlay=x=16:y=170[b1];[b1][r]overlay=x={W - PANE_W - 16}:y=170[b2];"
-        f"[b2]drawtext=fontfile={BOLD}:textfile={files['title']}:x=32:y=60:fontsize=38:fontcolor=white,"
+        f"[b2]drawtext=fontfile={BOLD}:textfile={files['title']}:x=32:y=60:fontsize={fit(title, BOLD, 38, W - 64)}:fontcolor=white,"
         f"drawtext=fontfile={FONT}:textfile={files['left']}:x=16:y=130:fontsize=24:fontcolor=0x8b95a5,"
         f"drawtext=fontfile={FONT}:textfile={files['right']}:x={W - PANE_W - 16}:y=130:fontsize=24:fontcolor=0x8b95a5,"
-        f"drawtext=fontfile={BOLD}:textfile={files['verdict']}:x=32:y={H - 140}:fontsize=34:"
+        f"drawtext=fontfile={BOLD}:textfile={files['verdict']}:x=32:y={H - 140}:fontsize={fit(verdict, BOLD, 34, W - 64)}:"
         f"fontcolor={'0x3fb950' if ok else '0xf85149'}:enable='gte(t,{dur - 1.5:.3f})',"
         f"fps={FPS},format=yuv420p[v]")
     # Seek on the inputs (fast) rather than with trim filters, which decode from the start.
