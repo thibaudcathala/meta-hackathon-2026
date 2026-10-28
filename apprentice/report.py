@@ -32,16 +32,20 @@ figcaption { color: var(--dim); font: 12px/1.4 ui-monospace, monospace; margin-t
 """
 
 
+def at(action):
+    return f"{action['x']},{action['y']}" if "x" in action else "pointer"
+
+
 def describe(action):
     kind = action["type"]
     if kind in ("click", "double_click", "move"):
-        return f"{kind} {action['x']},{action['y']}"
+        return f"{kind} {at(action)}"
     if kind == "keypress":
         return "key " + "+".join(action["keys"])
     if kind == "type":
         return f"type {action['text']!r}"
     if kind == "scroll":
-        return f"scroll {action.get('scroll_y', 0)} at {action['x']},{action['y']}"
+        return f"scroll {action.get('scroll_y', 0)} at {at(action)}"
     return kind
 
 

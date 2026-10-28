@@ -43,9 +43,8 @@ ACKABLE = {"computer_action_requires_confirmation"}
 # whose API rejects {"type": "computer"} (muse-wonder-1.0 answered "Unsupported tool type").
 COMPUTER_FUNCTION = {
     "type": "function", "name": "computer",
-    "description": "Operate the mouse and keyboard on the live screen. Coordinates are pixels "
-                   "of the latest screenshot. The actions run in order, then you receive a new "
-                   "screenshot.",
+    "description": "Operate the mouse and keyboard on the live screen. The actions run in "
+                   "order, then you receive a new screenshot.",
     "parameters": {"type": "object", "required": ["actions"], "properties": {"actions": {
         "type": "array", "items": {"type": "object", "required": ["type"], "properties": {
             "type": {"type": "string", "enum": ["click", "double_click", "drag", "keypress",
@@ -60,6 +59,16 @@ COMPUTER_FUNCTION = {
             "scroll_x": {"type": "integer"}, "scroll_y": {"type": "integer"},
             "ms": {"type": "integer"}}}}}},
 }
+
+
+def computer_function(size):
+    """The function with the screen size spelled out. Told only "pixels", Wonder sometimes
+    answered on a 0-1000 grid instead (Add clicked at 263,50 for 337,39); with the size stated it
+    lands within 2 px (calibrate.py)."""
+    w, h = size
+    return {**COMPUTER_FUNCTION, "description": COMPUTER_FUNCTION["description"] + (
+        f" x and y are pixels of the latest screenshot, which is {w}x{h}: x from 0 to {w - 1}, "
+        f"y from 0 to {h - 1}. A click without x and y clicks where the pointer is.")}
 
 
 def tool_mode(model):
@@ -133,7 +142,8 @@ class Apprentice:
 
     def request(self, input_items, previous=None, tag=""):
         # Reasoning shares the output allowance: keep room so a turn is not cut mid-thought.
-        tools = [COMPUTER_FUNCTION] if self.tool == "function" else [{"type": "computer"}]
+        tools = ([computer_function(self.desktop.size)] if self.tool == "function"
+                 else [{"type": "computer"}])
         payload = {"model": self.model, "instructions": self.instructions,
                    "tools": tools, "input": input_items,
                    "max_output_tokens": 8000}
@@ -259,7 +269,8 @@ class Apprentice:
             self.say(f"  attempt {attempt}: {'VERIFIED' if ok else 'FAILED'} - {message}")
             for e in errors:
                 self.say(f"    x {e}")
-            if ok or message.startswith("stopped:") or attempt == self.max_attempts:
+            # Out of turns is worth a retry with the verifier's findings; a safety stop is not.
+            if ok or message.startswith("stopped: safety") or attempt == self.max_attempts:
                 return {"step": sid, "ok": ok, "attempts": attempt, "message": message,
                         "errors": errors}
             if self.rewind:

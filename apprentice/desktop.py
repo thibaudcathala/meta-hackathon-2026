@@ -249,7 +249,7 @@ class VirtualDesktop:
             self.move(action["x"], action["y"])
             time.sleep(0.12)
         elif kind == "scroll":
-            self.scroll(action["x"], action["y"], action.get("scroll_x", 0),
+            self.scroll(x, y, action.get("scroll_x", 0),
                         action.get("scroll_y", 0))
         elif kind == "keypress":
             self.keypress(action["keys"])

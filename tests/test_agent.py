@@ -19,6 +19,8 @@ def png():
 
 
 class Desktop:
+    size = (1280, 800)
+
     def screenshot(self):
         return png()
 

@@ -9,7 +9,10 @@ import io
 
 from PIL import Image, ImageDraw
 
-from .agent import data_url
+import copy
+import json
+
+from .agent import COMPUTER_FUNCTION, data_url, image
 from .meta import output_items
 
 SPOTS = [(0.2, 0.25), (0.8, 0.3), (0.35, 0.8), (0.7, 0.7)]
@@ -57,12 +60,34 @@ def probe(client, model, size, spot, turns=3):
     return None
 
 
-def run(client, model, size):
+def function_tool(description):
+    tool = copy.deepcopy(COMPUTER_FUNCTION)
+    tool["description"] = description
+    return tool
+
+
+def probe_function(client, model, size, spot, description):
+    """Same probe through the computer() function tool, for models without the computer tool."""
+    response = client.create({
+        "model": model, "tools": [function_tool(description)], "max_output_tokens": 4000,
+        "input": [{"role": "user", "content": [
+            {"type": "input_text", "text": "Click the centre of the red button labelled CLICK."},
+            image(canvas(size, spot))]}],
+    }, tag="calibrate")
+    for call in output_items(response, "function_call"):
+        for action in json.loads(call.get("arguments") or "{}").get("actions", []):
+            if "x" in action:
+                return action["x"], action["y"]
+    return None
+
+
+def run(client, model, size, description=None):
     w, h = size
     rows = []
     for fx, fy in SPOTS:
         true = (int(fx * w), int(fy * h))
-        got = probe(client, model, size, true)
+        got = (probe_function(client, model, size, true, description) if description
+               else probe(client, model, size, true))
         rows.append((true, got))
     pairs = [(t, g) for t, g in rows if g]
     ax = sum(g[0] for t, g in pairs) / sum(t[0] for t, g in pairs) if pairs else None
