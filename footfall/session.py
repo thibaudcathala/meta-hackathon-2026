@@ -176,6 +176,8 @@ class Session:
                   "seconds": round(time.time() - start, 1), "funnel": self.funnel,
                   "email": self.email}
         self.run.event("end", **result)
+        self.say(f"  [{p['id']}] END {outcome}, order in store: {'yes' if truth['ok'] else 'no'}"
+                 f" - {message[:120]}")
         return result
 
     def __call__(self):

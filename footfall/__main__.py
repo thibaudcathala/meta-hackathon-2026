@@ -53,7 +53,8 @@ def cmd_crowd(args):
 
     with ThreadPoolExecutor(args.parallel) as pool:
         results = list(pool.map(one, personas))
-    summary = {"scenario": scenario["name"], "url": scenario["url"], "model": args.model,
+    summary = {"scenario": scenario["name"], "scenario_file": args.scenario,
+               "url": scenario["url"], "model": args.model,
                "results": results, "cost_usd": round(ledger.spent() - spent0, 4)}
     (out / "crowd.json").write_text(json.dumps(summary, indent=1))
     print()
@@ -69,6 +70,24 @@ def cmd_wall(args):
     from . import wall
     out, speed = wall.build(args.crowd, seconds=args.seconds)
     print(f"{out} (x{speed:.0f} speed)")
+
+
+def cmd_insights(args):
+    from . import insights
+    crowd = json.loads((Path(args.crowd) / "crowd.json").read_text())
+    scenario = json.loads(Path(args.scenario or crowd["scenario_file"]).read_text())
+    client = MetaClient(HttpBackend(), Ledger(LEDGER))
+    found = insights.analyse(client, args.crowd, scenario, model=args.model)
+    for stage in found["funnel"]:
+        print(f"{stage['stage']:<16} {len(stage['reached'])}/{len(found['results'])}  "
+              + ", ".join(stage["reached"]))
+    print()
+    for f in found["frictions"]:
+        print(f"[{f.get('severity', '?')}] {f['title']} ({', '.join(f.get('who', []))})")
+        for ev in f["evidence"][:2]:
+            print(f"    {ev['persona']} t{ev['turn']}: \"{ev['quote']}\"")
+        print(f"    fix: {f.get('fix', '')}")
+    print(f"\n{found['summary']}\n({found['dropped']} unsupported frictions dropped)")
 
 
 def cmd_ledger(args):
@@ -100,6 +119,11 @@ def main():
     w.add_argument("crowd", help="a runs/<time>-crowd directory")
     w.add_argument("--seconds", type=int, default=45)
     w.set_defaults(func=cmd_wall)
+    n = sub.add_parser("insights", help="friction points from a crowd run, with quotes")
+    n.add_argument("crowd")
+    n.add_argument("--scenario", help="defaults to the one the crowd ran")
+    n.add_argument("--model", default="muse-spark-1.3")
+    n.set_defaults(func=cmd_insights)
     sub.add_parser("ledger", help="show spend so far").set_defaults(func=cmd_ledger)
     args = parser.parse_args()
     args.func(args)
