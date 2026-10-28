@@ -1,0 +1,22 @@
+{
+  "title": "A smooth pebble in six steps",
+  "app": "blender",
+  "goal": "Turn the default scene into a flattened, smooth, tilted pebble.",
+  "source": {"kind": "hand-written fixture for offline runs"},
+  "steps": [
+    {"id": "s1", "t": 0, "instruction": "Delete the default cube.",
+     "expect": [{"op": "absent", "name": "Cube"}, {"op": "count", "type": "MESH", "eq": 0}]},
+    {"id": "s2", "t": 0, "instruction": "Add a UV sphere (Add > Mesh > UV Sphere).",
+     "expect": [{"op": "exists", "type": "MESH", "name": "Sphere*"},
+                {"op": "prop", "object": "@new", "path": "dimensions.0", "approx": 2.0, "tol": 0.01}]},
+    {"id": "s3", "t": 0, "instruction": "Scale the sphere to 0.6 along Z so it looks like a pebble (S, Z, 0.6, Enter).",
+     "expect": [{"op": "prop", "object": "Sphere*", "path": "dimensions.2", "approx": 1.2, "tol": 0.02},
+                {"op": "prop", "object": "Sphere*", "path": "dimensions.0", "approx": 2.0, "tol": 0.02}]},
+    {"id": "s4", "t": 0, "instruction": "Add a Subdivision Surface modifier with 2 viewport levels (Ctrl+2).",
+     "expect": [{"op": "modifier", "object": "Sphere*", "type": "SUBSURF", "props": {"levels": 2}}]},
+    {"id": "s5", "t": 0, "instruction": "Shade the pebble smooth (Object > Shade Smooth).",
+     "expect": [{"op": "prop", "object": "Sphere*", "path": "mesh.smooth_fraction", "gte": 0.99}]},
+    {"id": "s6", "t": 0, "instruction": "Tilt it 30 degrees around X (R, X, 30, Enter).",
+     "expect": [{"op": "prop", "object": "Sphere*", "path": "rotation_euler.0", "approx": 0.5236, "tol": 0.01}]}
+  ]
+}

@@ -1,0 +1,37 @@
+{
+  "s1": [[
+    {"actions": [{"type": "move", "x": 520, "y": 420}, {"type": "keypress", "keys": ["Delete"]}]},
+    {"say": "Deleted the default cube."}
+  ]],
+  "s2": [[
+    {"actions": [{"type": "move", "x": 520, "y": 420}, {"type": "keypress", "keys": ["shift", "a"]}, {"type": "wait", "ms": 500}]},
+    {"actions": [{"type": "keypress", "keys": ["Escape"]}, {"type": "keypress", "keys": ["F3"]}, {"type": "wait", "ms": 500}]},
+    {"actions": [{"type": "type", "text": "uv sphere"}, {"type": "wait", "ms": 700}]},
+    {"actions": [{"type": "keypress", "keys": ["Return"]}, {"type": "wait", "ms": 500}]},
+    {"say": "Added a UV sphere at the 3D cursor."}
+  ]],
+  "s3": [
+    [
+      {"actions": [{"type": "move", "x": 520, "y": 420}, {"type": "type", "text": "sz0.3"}, {"type": "keypress", "keys": ["Return"]}]},
+      {"say": "Scaled the sphere along Z."}
+    ],
+    [
+      {"actions": [{"type": "move", "x": 520, "y": 420}, {"type": "type", "text": "sz2"}, {"type": "keypress", "keys": ["Return"]}]},
+      {"say": "Doubled the Z scale, it is now 0.6."}
+    ]
+  ],
+  "s4": [[
+    {"actions": [{"type": "move", "x": 520, "y": 420}, {"type": "keypress", "keys": ["ctrl", "2"]}, {"type": "wait", "ms": 300}]},
+    {"say": "Added a Subdivision Surface modifier at level 2."}
+  ]],
+  "s5": [[
+    {"actions": [{"type": "move", "x": 520, "y": 420}, {"type": "keypress", "keys": ["F3"]}, {"type": "wait", "ms": 500}]},
+    {"actions": [{"type": "type", "text": "shade smooth"}, {"type": "wait", "ms": 700}]},
+    {"actions": [{"type": "keypress", "keys": ["Return"]}, {"type": "wait", "ms": 300}]},
+    {"say": "Shaded the pebble smooth."}
+  ]],
+  "s6": [[
+    {"actions": [{"type": "move", "x": 520, "y": 420}, {"type": "type", "text": "rx30"}, {"type": "keypress", "keys": ["Return"]}]},
+    {"say": "Rotated it 30 degrees around X."}
+  ]]
+}
