@@ -43,6 +43,12 @@ def estimate_tokens(value):
     return 0
 
 
+class ApiError(RuntimeError):
+    def __init__(self, message, status, body):
+        super().__init__(message)
+        self.status, self.body = status, body
+
+
 class HttpBackend:
     mock = False
 
@@ -61,7 +67,7 @@ class HttpBackend:
                 break
             time.sleep(min(2 ** attempt, 20))
         if r.is_error:
-            raise RuntimeError(f"{method} {path} -> {r.status_code}: {r.text[:500]}")
+            raise ApiError(f"{method} {path} -> {r.status_code}: {r.text[:500]}", r.status_code, r.text)
         return r.json()
 
     def create(self, payload):

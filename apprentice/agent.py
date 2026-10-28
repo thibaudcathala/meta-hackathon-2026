@@ -13,7 +13,7 @@ from pathlib import Path
 
 from PIL import Image
 
-from .meta import output_text
+from .meta import ApiError, output_text
 from .verify import verify
 
 SYSTEM = """You are an apprentice redoing a Blender tutorial on a real Blender {version} window.
@@ -129,6 +129,7 @@ class Apprentice:
         self.effort = effort
         self.instructions = SYSTEM.format(version=version)
         self.say = say
+        self.restart = []
 
     def request(self, input_items, previous=None, tag=""):
         # Reasoning shares the output allowance: keep room so a turn is not cut mid-thought.
@@ -140,11 +141,32 @@ class Apprentice:
             payload["reasoning"] = {"effort": self.effort}
         if previous:
             payload["previous_response_id"] = previous
-        response = self.client.create(payload, tag=tag)
+        response = self.send(payload, tag)
         self.run.response(response)
         if response.get("status") == "incomplete":
             self.run.event("incomplete", details=response.get("incomplete_details"))
         return response
+
+    def send(self, payload, tag):
+        """Create a response. The API sometimes loses a stored response mid-chain ("referenced
+        response not found or expired"): retry, then restart the step's conversation from the
+        current screen, since the screen holds everything that was done so far."""
+        for wait in (2, 8, None):
+            try:
+                return self.client.create(payload, tag=tag)
+            except ApiError as exc:
+                if "referenced response not found" not in exc.body or "previous_response_id" not in payload:
+                    raise
+                if wait is None:
+                    break
+                time.sleep(wait)
+        self.run.event("context_lost", step=tag, previous=payload["previous_response_id"])
+        fresh = {k: v for k, v in payload.items() if k != "previous_response_id"}
+        fresh["input"] = [{"role": "user", "content": self.restart + [
+            {"type": "input_text", "text": "Your earlier turns on this step were lost. The step may "
+             "be partly done: continue from the current screen."},
+            image(self.desktop.screenshot())]}]
+        return self.client.create(fresh, tag=tag)
 
     def act(self, response, step_id):
         """Drive one step's observe-act loop. Returns (last response, final message)."""
@@ -213,7 +235,8 @@ class Apprentice:
         self.say(f"[{sid}] {step['instruction']}")
 
         png = self.desktop.screenshot()
-        content = self.step_prompt(tutorial, index) + [
+        self.restart = self.step_prompt(tutorial, index)
+        content = self.restart + [
             {"type": "input_text", "text": "Current screen:"}, image(png)]
         self.run.event("observe", step=sid, shot=self.run.shot(png, f"{sid}-start"))
         response = self.request([{"role": "user", "content": content}], tag=sid)
