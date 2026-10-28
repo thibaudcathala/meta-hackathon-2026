@@ -6,7 +6,7 @@ import sys
 import time
 from pathlib import Path
 
-from . import report
+from . import montage, report
 from . import tutorial as tutorials
 from .agent import Apprentice, Run
 from .blender import Blender
@@ -46,6 +46,7 @@ def cmd_run(args):
         app = Blender(desktop, run.dir / "blender").launch()
         if args.record:
             desktop.record(run.dir / "screen.mp4")
+            run.event("record_start")
         agent = Apprentice(client, desktop, app, run, model=args.model, max_turns=args.max_turns,
                            max_attempts=args.attempts, rewind=args.rewind,
                            ack_safety=args.ack_safety, frames=not args.no_frames,
@@ -98,6 +99,12 @@ def cmd_report(args):
     print(report.build(args.run, tuple(start.get("size", (1280, 800)))))
 
 
+def cmd_montage(args):
+    start = json.loads((Path(args.run) / "events.jsonl").open().readline())
+    print(montage.build(args.run, args.tutorial or start["tutorial"], args.video,
+                        left=args.left, right=args.right or f"Apprentice ({start['model']}), live"))
+
+
 def cmd_shot(args):
     with VirtualDesktop(*args.size, log_dir="runs/shot") as desktop:
         Blender(desktop, "runs/shot/blender").launch()
@@ -143,6 +150,14 @@ def main(argv=None):
     rep = sub.add_parser("report", help="rebuild report.html for a run directory")
     rep.add_argument("run")
     rep.set_defaults(func=cmd_report)
+
+    m = sub.add_parser("montage", help="side-by-side film: tutorial video vs the run")
+    m.add_argument("run")
+    m.add_argument("video", help="the tutorial video")
+    m.add_argument("--tutorial", help="tutorial dir (default: the run's)")
+    m.add_argument("--left", default="Tutorial video")
+    m.add_argument("--right")
+    m.set_defaults(func=cmd_montage)
 
     s = sub.add_parser("shot", help="start Blender on a private display and save a screenshot")
     s.add_argument("out")
