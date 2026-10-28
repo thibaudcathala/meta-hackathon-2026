@@ -73,6 +73,8 @@ def object_state(ob):
              "modifiers": [{"name": m.name, "type": m.type, **rna_props(m)} for m in ob.modifiers],
              "materials": [material_state(s.material) for s in ob.material_slots if s.material]}
     if ob.type == "MESH":
+        if ob.mode == "EDIT":
+            ob.update_from_editmode()  # edit-mode changes only reach ob.data on sync
         mesh = ob.data
         faces = len(mesh.polygons)
         state["mesh"] = {"vertices": len(mesh.vertices), "edges": len(mesh.edges), "faces": faces,

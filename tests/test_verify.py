@@ -3,11 +3,11 @@ import unittest
 from apprentice.verify import verify
 
 SCENE = {"mode": "OBJECT", "active": "Sphere", "objects": [
-    {"name": "Sphere", "type": "MESH", "dimensions": [2.0, 2.0, 1.2],
+    {"name": "Sphere", "type": "MESH", "location": [0, 0, 0], "dimensions": [2.0, 2.0, 1.2],
      "rotation_euler": [0.5236, 0.0, 0.0], "mesh": {"smooth_fraction": 1.0},
      "modifiers": [{"name": "Subdivision", "type": "SUBSURF", "levels": 2}],
      "materials": [{"name": "Red", "base_color": [0.8, 0.05, 0.05, 1.0], "metallic": 0.0}]},
-    {"name": "Light", "type": "LIGHT", "dimensions": [0, 0, 0], "modifiers": [], "materials": []},
+    {"name": "Light", "type": "LIGHT", "location": [0, 0, 0], "dimensions": [0, 0, 0], "modifiers": [], "materials": []},
 ]}
 BEFORE = {"objects": [{"name": "Light"}]}
 
@@ -27,6 +27,8 @@ class VerifyTest(unittest.TestCase):
             {"op": "prop", "object": "Sphere", "path": "dimensions.2", "approx": 1.2, "tol": 0.01},
             {"op": "prop", "object": "Sphere", "path": "modifiers[SUBSURF].levels", "gte": 1},
             {"op": "prop", "path": "mode", "eq": "OBJECT"},
+            {"op": "distance", "object": "Sphere", "to": [0, 0, 3], "approx": 3.0},
+            {"op": "distance", "object": "Sphere", "to": "Light", "lte": 0.1},
         ], SCENE, BEFORE)
         self.assertTrue(ok)
 
@@ -35,6 +37,8 @@ class VerifyTest(unittest.TestCase):
             {"op": "prop", "object": "@active", "path": "dimensions.2", "approx": 0.6})[0])
         self.assertIn("no BEVEL modifier", errors(
             {"op": "modifier", "object": "Sphere", "type": "BEVEL"})[0])
+        self.assertIn("expected at least 5", errors(
+            {"op": "distance", "object": "Sphere", "to": [3, 4, 0], "gte": 5.5})[0])
         self.assertIn("remain", errors({"op": "absent", "name": "Light"})[0])
         self.assertIn("no object matches", errors(
             {"op": "prop", "object": "Cube", "path": "scale.0", "eq": 1})[0])

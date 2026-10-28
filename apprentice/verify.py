@@ -9,9 +9,11 @@ A step carries a list of checks, small JSON objects the tutorial reader writes:
   {"op": "material", "object": "@active", "base_color": [0.8, 0.1, 0.1], "tol": 0.15}
   {"op": "prop",     "object": "@active", "path": "dimensions.2", "approx": 1.2, "tol": 0.05}
   {"op": "prop",     "path": "mode", "eq": "OBJECT"}
+  {"op": "distance", "object": "Sphere*", "to": "Cube", "gte": 2.5}
 
 `object` is a name glob, "@active", or "@new" (created during this step). `prop` compares with
-eq, approx (+tol), gte or lte; a path is dot-separated, and "modifiers[BEVEL]" picks a list
+eq, approx (+tol), gte or lte, and so does `distance` (between object origins; `to` is an object
+or an [x, y, z] point); a path is dot-separated, and "modifiers[BEVEL]" picks a list
 entry by type or name. Object paths: location, rotation_euler, scale, dimensions (x, y, z
 lists), mesh.vertices, mesh.faces, mesh.smooth_fraction, modifiers[TYPE].<Python API property>,
 materials.0.<base_color|metallic|roughness>, light.energy, camera.lens. Scene paths: mode,
@@ -99,14 +101,14 @@ def run_check(check, scene, before=None):
         return f"no object matches {check.get('object', '@active')!r}"
     reasons = []
     for ob in targets:
-        reason = _object_check(op, check, ob)
+        reason = _object_check(op, check, ob, scene)
         if reason is None:
             return None
         reasons.append(f"{ob['name']}: {reason}")
     return "; ".join(reasons)
 
 
-def _object_check(op, check, ob):
+def _object_check(op, check, ob, scene):
     if op == "modifier":
         mods = [m for m in ob["modifiers"] if m["type"] == check["type"]]
         if not mods:
@@ -128,6 +130,16 @@ def _object_check(op, check, ob):
                 if problem:
                     return f"material {mat['name']} {key} {problem}"
         return None
+    if op == "distance":
+        to = check["to"]
+        if isinstance(to, str):
+            hits = [o for o in scene["objects"] if fnmatch.fnmatchcase(o["name"], to)]
+            if not hits:
+                return f"no object {to!r} to measure from"
+            to = hits[0]["location"]
+        gap = round(sum((a - b) ** 2 for a, b in zip(ob["location"], to)) ** 0.5, 4)
+        problem = compare(gap, check)
+        return f"distance to {check['to']} {problem}" if problem else None
     if op == "prop":
         try:
             problem = compare(walk(ob, check["path"]), check)

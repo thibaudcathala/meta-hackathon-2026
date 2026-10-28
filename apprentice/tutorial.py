@@ -19,7 +19,9 @@ VIDEO_TOKENS_PER_SECOND = 400
 CHECK_SCHEMA = {
     "type": "object",
     "properties": {
-        "op": {"type": "string", "enum": ["exists", "absent", "count", "modifier", "material", "prop"]},
+        "op": {"type": "string", "enum": ["exists", "absent", "count", "modifier", "material", "prop",
+                                         "distance"]},
+        "to": {},
         "object": {"type": "string"}, "type": {"type": "string"}, "name": {"type": "string"},
         "path": {"type": "string"}, "props": {"type": "object"},
         "eq": {}, "approx": {}, "tol": {"type": "number"},
