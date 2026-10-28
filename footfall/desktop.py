@@ -32,13 +32,6 @@ BUTTONS = {"left": 1, "wheel": 2, "middle": 2, "right": 3, "back": 8, "forward":
 CURSOR = [(0, 0), (0, 17), (4, 13), (7, 20), (10, 19), (7, 12), (12, 12)]
 
 
-def free_display():
-    for n in range(90, 200):
-        if not Path(f"/tmp/.X{n}-lock").exists() and not Path(f"/tmp/.X11-unix/X{n}").exists():
-            return n
-    raise RuntimeError("no free X display number")
-
-
 def keysym_for(name):
     if name in CHAR_KEYSYMS:
         name = CHAR_KEYSYMS[name]
@@ -72,16 +65,20 @@ class VirtualDesktop:
         return f":{self.num}"
 
     def start(self):
-        self.num = free_display()
+        # Xvfb picks a free display number itself and reports it on -displayfd: choosing one
+        # from the lock files raced when several personas started at once (two shared :90).
         w, h = self.size
         log = open(self.log_dir / "xvfb.log", "wb")
+        read_fd, write_fd = os.pipe()
         self.procs.append(subprocess.Popen(
-            ["Xvfb", self.name, "-screen", "0", f"{w}x{h}x24", "-nolisten", "tcp"],
-            stdout=log, stderr=subprocess.STDOUT))
-        for _ in range(100):
-            if Path(f"/tmp/.X11-unix/X{self.num}").exists():
-                break
-            time.sleep(0.05)
+            ["Xvfb", "-displayfd", str(write_fd), "-screen", "0", f"{w}x{h}x24",
+             "-nolisten", "tcp"], stdout=log, stderr=subprocess.STDOUT, pass_fds=(write_fd,)))
+        os.close(write_fd)
+        with os.fdopen(read_fd) as pipe:
+            line = pipe.readline().strip()
+        if not line:
+            raise RuntimeError(f"Xvfb did not start, see {self.log_dir / 'xvfb.log'}")
+        self.num = int(line)
         self.d = display.Display(self.name)
         self.root = self.d.screen().root
         return self
