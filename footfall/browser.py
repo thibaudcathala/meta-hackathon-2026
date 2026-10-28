@@ -10,6 +10,7 @@ import socket
 import tempfile
 import time
 import urllib.request
+from pathlib import Path
 
 CHROME = shutil.which("google-chrome") or shutil.which("chromium") or "google-chrome"
 
@@ -27,6 +28,15 @@ class Browser:
         self.profile = tempfile.mkdtemp(prefix="footfall-chrome-")
 
     def launch(self):
+        # Chrome's own bubbles ("Save address?", "Save password?") are not the site's doing:
+        # switch them off so every friction a persona meets belongs to the site.
+        default = Path(self.profile) / "Default"
+        default.mkdir(parents=True, exist_ok=True)
+        (default / "Preferences").write_text(json.dumps({
+            "autofill": {"profile_enabled": False, "credit_card_enabled": False},
+            "credentials_enable_service": False,
+            "profile": {"password_manager_enabled": False},
+            "translate": {"enabled": False}}))
         w, h = self.desktop.size
         self.proc = self.desktop.launch([
             CHROME, f"--user-data-dir={self.profile}", f"--remote-debugging-port={self.port}",

@@ -43,7 +43,8 @@ def cmd_crowd(args):
 
     def one(persona):
         session = Session(client, persona, scenario, out / persona["id"], model=args.model,
-                          size=tuple(args.size), effort=args.effort, run_id=run_id)
+                          size=tuple(args.size), effort=args.effort, run_id=run_id,
+                          max_turns=args.max_turns)
         try:
             return session()
         except Exception as exc:  # one broken session must not take the crowd down
@@ -86,6 +87,7 @@ def main():
     c.add_argument("--model", default="muse-spark-1.3")
     c.add_argument("--parallel", type=int, default=2)
     c.add_argument("--effort", default="low")
+    c.add_argument("--max-turns", type=int, default=60, help="cost ceiling per persona")
     c.add_argument("--size", type=int, nargs=2, default=[1280, 800])
     c.set_defaults(func=cmd_crowd)
     sub.add_parser("ledger", help="show spend so far").set_defaults(func=cmd_ledger)

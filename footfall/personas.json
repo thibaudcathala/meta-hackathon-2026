@@ -4,11 +4,23 @@
     "name": "Margaret",
     "age": 78,
     "bio": "Retired schoolteacher. Age-related macular degeneration: small or faint text is a grey smudge to her. She mostly uses an iPad for video calls with her grandchildren and only shops online when she has to. She reads slowly, re-reads, and does not like clicking things she does not understand.",
-    "eyes": {"blur": 3.5, "contrast": 0.55},
+    "eyes": {
+      "blur": 3.5,
+      "contrast": 0.55
+    },
     "eyes_note": "macular degeneration: small and low-contrast text is blurred",
-    "hands": {"tremor": 0},
-    "patience": 30,
-    "details": {"first_name": "Margaret", "last_name": "Hollis", "address": "14 Gillygate", "city": "York", "postal_code": "YO31 7EA", "country": "United Kingdom", "phone": "+44 1904 555 014"}
+    "hands": {
+      "tremor": 0
+    },
+    "details": {
+      "first_name": "Margaret",
+      "last_name": "Hollis",
+      "address": "14 Gillygate",
+      "city": "York",
+      "postal_code": "YO31 7EA",
+      "country": "United Kingdom",
+      "phone": "+44 1904 555 014"
+    }
   },
   {
     "id": "karim",
@@ -17,20 +29,40 @@
     "bio": "Nurse, on a ten-minute break between two shifts. Shops on his phone or whatever screen is near. He skims, never reads paragraphs, clicks the first thing that looks right, and leaves the moment something feels slow or confusing.",
     "eyes": {},
     "eyes_note": "",
-    "hands": {"tremor": 0},
-    "patience": 12,
-    "details": {"first_name": "Karim", "last_name": "Benali", "address": "22 Oxford Road", "city": "Manchester", "postal_code": "M13 9WL", "country": "United Kingdom", "phone": "+44 161 555 022"}
+    "hands": {
+      "tremor": 0
+    },
+    "details": {
+      "first_name": "Karim",
+      "last_name": "Benali",
+      "address": "22 Oxford Road",
+      "city": "Manchester",
+      "postal_code": "M13 9WL",
+      "country": "United Kingdom",
+      "phone": "+44 161 555 022"
+    }
   },
   {
     "id": "jonas",
     "name": "Jonas",
     "age": 45,
     "bio": "Warehouse manager in Hamburg. Deuteranopia (red-green colour blindness) since birth: he relies on labels and shapes, never on colour alone. Comfortable with computers, reads English well but prefers German.",
-    "eyes": {"colour": "deuteranopia"},
+    "eyes": {
+      "colour": "deuteranopia"
+    },
     "eyes_note": "red-green colour blindness (deuteranopia)",
-    "hands": {"tremor": 0},
-    "patience": 25,
-    "details": {"first_name": "Jonas", "last_name": "Albrecht", "address": "Lange Reihe 41", "city": "Hamburg", "postal_code": "20099", "country": "Germany", "phone": "+49 40 555 0041"}
+    "hands": {
+      "tremor": 0
+    },
+    "details": {
+      "first_name": "Jonas",
+      "last_name": "Albrecht",
+      "address": "Lange Reihe 41",
+      "city": "Hamburg",
+      "postal_code": "20099",
+      "country": "Germany",
+      "phone": "+49 40 555 0041"
+    }
   },
   {
     "id": "lucia",
@@ -39,20 +71,47 @@
     "bio": "Retired pharmacist in Valencia with Parkinson's disease. Her hand shakes, so the mouse rarely lands exactly where she aims and small buttons are a struggle. Her eyesight is fine and she is patient, but repeated misclicks wear her down. Her English is basic.",
     "eyes": {},
     "eyes_note": "",
-    "hands": {"tremor": 12},
-    "patience": 30,
-    "details": {"first_name": "Lucía", "last_name": "Ferrer", "address": "Carrer de Sueca 18", "city": "Valencia", "postal_code": "46006", "country": "Spain", "phone": "+34 963 555 018"}
+    "hands": {
+      "tremor": 12
+    },
+    "details": {
+      "first_name": "Lucía",
+      "last_name": "Ferrer",
+      "address": "Carrer de Sueca 18",
+      "city": "Valencia",
+      "postal_code": "46006",
+      "country": "Spain",
+      "phone": "+34 963 555 018"
+    }
   },
   {
     "id": "agnes",
     "name": "Agnes",
     "age": 84,
     "bio": "Lives alone in Copenhagen and has cataracts in both eyes: everything looks hazy, yellowed and washed out, and bright white screens dazzle her. Her grandson set up the computer; she is careful, slow and afraid of paying twice.",
-    "eyes": {"blur": 2.5, "contrast": 0.65, "tint": [1.0, 0.93, 0.7], "brightness": 1.12},
+    "eyes": {
+      "blur": 2.5,
+      "contrast": 0.65,
+      "tint": [
+        1.0,
+        0.93,
+        0.7
+      ],
+      "brightness": 1.12
+    },
     "eyes_note": "cataracts: hazy, yellowed, low-contrast vision with glare",
-    "hands": {"tremor": 4},
-    "patience": 30,
-    "details": {"first_name": "Agnes", "last_name": "Nygaard", "address": "Blegdamsvej 9", "city": "Copenhagen", "postal_code": "2100", "country": "Denmark", "phone": "+45 35 55 50 09"}
+    "hands": {
+      "tremor": 4
+    },
+    "details": {
+      "first_name": "Agnes",
+      "last_name": "Nygaard",
+      "address": "Blegdamsvej 9",
+      "city": "Copenhagen",
+      "postal_code": "2100",
+      "country": "Denmark",
+      "phone": "+45 35 55 50 09"
+    }
   },
   {
     "id": "tom",
@@ -61,8 +120,17 @@
     "bio": "Accountant in Bristol. Sceptical of small online shops: he reads the small print, looks for the total with shipping and taxes before paying, and abandons anything that hides costs or asks for more than it needs.",
     "eyes": {},
     "eyes_note": "",
-    "hands": {"tremor": 0},
-    "patience": 25,
-    "details": {"first_name": "Tom", "last_name": "Whitaker", "address": "7 Park Street", "city": "Bristol", "postal_code": "BS1 5NF", "country": "United Kingdom", "phone": "+44 117 555 007"}
+    "hands": {
+      "tremor": 0
+    },
+    "details": {
+      "first_name": "Tom",
+      "last_name": "Whitaker",
+      "address": "7 Park Street",
+      "city": "Bristol",
+      "postal_code": "BS1 5NF",
+      "country": "United Kingdom",
+      "phone": "+44 117 555 007"
+    }
   }
 ]

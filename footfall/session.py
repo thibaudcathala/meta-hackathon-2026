@@ -32,8 +32,9 @@ something is too faint or too small for you to read, act on what you can make ou
 would in real life.
 
 Before every action, think aloud in the first person, in one or two short sentences: what you
-see, what you are looking for, how you feel. Then act. Take a few actions at once only when
-they need no looking in between (typing into a field you already clicked, for example).
+see, what you are looking for, how you feel. Then act. Take several actions at once when they
+need no looking in between: in a form, click a field and type into it in the same turn, and
+fill every field you can see before looking again.
 
 When your goal is done, reply with "DONE:" and one sentence. If you would give up in real
 life, reply with "I GIVE UP:" and why, in your own words."""
@@ -53,11 +54,12 @@ def describe(action):
 
 class Session:
     def __init__(self, client, persona, scenario, out_dir, model="muse-spark-1.3", size=(1280, 800),
-                 record=True, effort="low", say=print, run_id=None):
+                 record=True, effort="low", say=print, run_id=None, max_turns=60):
         self.client, self.persona, self.scenario = client, persona, scenario
         self.dir = Path(out_dir)
         self.model, self.size, self.record = model, size, record
         self.effort, self.say = effort, say
+        self.max_turns = max_turns  # a cost ceiling; giving up is the persona's own call
         self.tool = tool_mode(model)
         self.run = Run(self.dir)
         self.hands = Hands(persona.get("hands", {}).get("tremor", 0), seed=persona["id"])
@@ -75,7 +77,7 @@ class Session:
     def prompt(self):
         details = {**self.persona["details"], "email": self.email}
         lines = [f"Your goal: {self.scenario['task']}",
-                 "If a form asks, your details are: "
+                 "What you know by heart, for forms: "
                  + "; ".join(f"{k.replace('_', ' ')}: {v}" for k, v in details.items()) + "."]
         if self.journal:
             lines.append("What you have done so far:")
@@ -129,8 +131,8 @@ class Session:
         start = time.time()
         self.run.event("start", persona=p["id"], model=self.model, scenario=self.scenario["name"],
                        email=self.email, size=list(self.size))
-        outcome, message, turns = "out of patience", "", 0
-        for turn in range(p.get("patience", 25)):
+        outcome, message, turns = "turn limit", "", 0
+        for turn in range(self.max_turns):
             turns = turn + 1
             self.desktop.settle(quiet=0.5, timeout=6)
             raw = self.desktop.screenshot()
