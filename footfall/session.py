@@ -12,6 +12,8 @@ import json
 import time
 from pathlib import Path
 
+from PIL import ImageChops
+
 from .browser import Browser
 from .computer import ACKABLE, Run, computer_function, image, next_call, tool_mode
 from .desktop import VirtualDesktop
@@ -55,6 +57,28 @@ def describe(action):
 # Screen sizes in CSS pixels. A phone or tablet is a narrow Chrome window with a mobile user
 # agent: the site serves its mobile layout, and the persona still clicks rather than taps.
 DEVICES = {"phone": (412, 870), "tablet": (820, 1100), "laptop": (1280, 800)}
+
+
+def change(before, after):
+    """What a person would notice between two frames even without reading them: nothing at all,
+    or something small flickering in one place (a counter, a badge) while the rest stays still."""
+    box = ImageChops.difference(before, after).getbbox()
+    if box is None:
+        return "nothing on the screen changed"
+    x0, y0, x1, y1 = box
+    w, h = after.size
+    if (x1 - x0) * (y1 - y0) < 0.01 * w * h:
+        return f"only a small spot changed on the screen, around {(x0 + x1) // 2},{(y0 + y1) // 2}"
+    return ""
+
+
+def same(a, b, slack=25):
+    """The same actions again, aimed at about the same place."""
+    if not a or not b or len(a) != len(b):
+        return False
+    return all(x.get("type") == y.get("type") and x.get("text") == y.get("text")
+               and abs(x.get("x", 0) - y.get("x", 0)) <= slack
+               and abs(x.get("y", 0) - y.get("y", 0)) <= slack for x, y in zip(a, b))
 
 
 class Session:
@@ -139,15 +163,18 @@ class Session:
         self.run.event("start", persona=p["id"], model=self.model, scenario=self.scenario["name"],
                        email=self.email, size=list(self.size))
         outcome, message, turns = "turn limit", "", 0
-        before = None
+        before, last, repeats = None, None, 0
         for turn in range(self.max_turns):
             turns = turn + 1
             self.desktop.settle(quiet=0.5, timeout=6)
-            # A person notices when a click changes nothing; the model, looking at one blurred
-            # frame at a time, does not, and keeps clicking the same empty spot.
-            bare = self.desktop.grab(cursor=False).tobytes()
-            if before is not None and bare == before and self.journal:
-                self.journal[-1] += " - nothing on the screen changed"
+            # A person notices when a click changes nothing, or only makes a small counter
+            # flicker in a corner; the model, looking at one frame at a time, does not, and
+            # keeps pressing the same button (one persona put 16 shirts in the cart).
+            bare = self.desktop.grab(cursor=False)
+            if before is not None and self.journal:
+                noticed = change(before, bare)
+                if noticed:
+                    self.journal[-1] += " - " + noticed
             before = bare
             raw = self.desktop.screenshot()
             seen = see_png(raw, p.get("eyes"))
@@ -179,6 +206,11 @@ class Session:
                      + ", ".join(describe(a) for a in call["actions"]))
             entry = (f'You thought: "{thought[:240]}"; you ' if thought else "You ")
             entry += ", ".join(describe(a) for a in call["actions"])
+            # People know when they are pressing the same thing for the fourth time.
+            repeats = repeats + 1 if same(call["actions"], last) else 0
+            last = call["actions"]
+            if repeats >= 2:
+                entry += f" (the same as your previous {repeats} actions)"
             if failed:
                 entry += " (" + "; ".join(failed) + ")"
             self.journal.append(entry)
