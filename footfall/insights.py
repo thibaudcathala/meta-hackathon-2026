@@ -86,7 +86,9 @@ def analyse(client, crowd_dir, scenario, model="muse-spark-1.3"):
     summary, sessions = load(crowd_dir)
     prompt = PROMPT.format(task=scenario["task"],
                            journals="\n\n".join(journal(s) for s in sessions))
-    response = client.create({"model": model, "max_output_tokens": 6000,
+    # Eight long journals once filled 6,000 tokens and cut the JSON short: leave room.
+    response = client.create({"model": model, "max_output_tokens": 20000,
+                              "reasoning": {"effort": "low"},
                               "input": [{"role": "user", "content": [
                                   {"type": "input_text", "text": prompt}]}]}, tag="insights")
     found = parse_json(output_text(response))
