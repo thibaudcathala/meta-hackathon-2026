@@ -99,7 +99,8 @@ def same(a, b, slack=25):
 
 LOOK = """{name} is about to {action}{then}. Their thought: "{thought}"
 
-The image is a close-up of {name}'s screen around that spot, enlarged {k}x, as they see it. The
+The image is a close-up of {name}'s screen around that spot, enlarged {k}x, as they see it
+({cw}x{ch} pixels). The
 red cross marks exactly where the pointer is about to land. If it is on what they mean to
 click, reply {{"ok": true}}. If what they mean is elsewhere in the close-up, reply with its
 centre in the close-up's pixels: {{"x": 123, "y": 45}}. If it is not in the close-up at all,
@@ -109,7 +110,7 @@ reply {{"ok": true}}. JSON only."""
 class Session:
     def __init__(self, client, persona, scenario, out_dir, model="muse-spark-1.3", size=None,
                  record=True, effort="low", say=print, run_id=None, max_turns=60,
-                 closed_loop=True):
+                 closed_loop=True, eye_model=None):
         self.client, self.persona, self.scenario = client, persona, scenario
         self.dir = Path(out_dir)
         self.device = persona.get("device", "laptop")
@@ -123,6 +124,9 @@ class Session:
         self.effort, self.say = effort, say
         self.max_turns = max_turns  # a cost ceiling; giving up is the persona's own call
         self.closed_loop = closed_loop
+        # Muse Wonder centres a target in one wide glance; Spark needs a second, closer one.
+        self.eye_model = eye_model or model
+        self.glances = ((200, 2),) if "wonder" in self.eye_model else ((200, 2), (60, 4))
         self.tool = tool_mode(model)
         self.run = Run(self.dir)
         self.hands = Hands(persona.get("hands", {}).get("tremor", 0), seed=persona["id"])
@@ -185,18 +189,18 @@ class Session:
         """Closed-loop pointing: before a click lands, the persona looks at the spot, as people
         do while they move a mouse, and corrects its aim. The model alone points open-loop: on
         a phone it typed an email 140 pixels below the field and missed dropdown rows by one.
-        Two glances, like an eye homing in: a wide one finds the target, a close one centres
-        on it. Both are taken through the persona's own eyes, so poor sight still makes poor
-        corrections."""
+        The glance is taken through the persona's own eyes, so poor sight still makes poor
+        corrections; the hand's tremor applies after it."""
         if action.get("type") not in ("click", "double_click") or "x" not in action:
             return action
-        for half, k in ((200, 2), (60, 4)):
+        for half, k in self.glances:
             action = self.glance(action, thought, turn, then, half, k)
         return action
 
     def glance(self, action, thought, turn, then, half, k):
         w, h = self.size
-        x, y = action["x"], action["y"]
+        # The model sometimes aims off the screen (Chloe once clicked past its right edge).
+        x, y = min(max(int(action["x"]), 0), w - 1), min(max(int(action["y"]), 0), h - 1)
         box = (max(0, x - half), max(0, y - half), min(w, x + half), min(h, y + half))
         crop = see(self.desktop.grab(cursor=False), self.persona.get("eyes")).crop(box)
         crop = crop.resize((round(crop.width * k), round(crop.height * k)))
@@ -210,10 +214,11 @@ class Session:
         # name, not in Company, though both are boxes of the same size side by side.
         then = f", then {describe(then)}" if then and then.get("type") == "type" else ""
         prompt = LOOK.format(name=self.persona["name"], action=describe(action), then=then,
-                             thought=thought[:300], k=k)
+                             thought=thought[:300], k=k, cw=crop.width, ch=crop.height)
         try:
             response = self.client.create({
-                "model": self.model, "max_output_tokens": 2000, "reasoning": {"effort": "low"},
+                "model": self.eye_model, "max_output_tokens": 2000,
+                "reasoning": {"effort": "low"},
                 "input": [{"role": "user", "content": [{"type": "input_text", "text": prompt},
                                                        image(buf.getvalue())]}]},
                 tag=self.persona["id"] + "-look")

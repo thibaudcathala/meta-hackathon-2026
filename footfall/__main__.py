@@ -46,7 +46,7 @@ def cmd_crowd(args):
     def one(persona):
         session = Session(client, persona, scenario, out / persona["id"], model=args.model,
                           size=args.size, effort=args.effort, run_id=run_id,
-                          max_turns=args.max_turns)
+                          max_turns=args.max_turns, eye_model=args.eye_model)
         try:
             return session()
         except Exception as exc:  # one broken session must not take the crowd down
@@ -56,6 +56,7 @@ def cmd_crowd(args):
     with ThreadPoolExecutor(args.parallel) as pool:
         results = list(pool.map(one, personas))
     summary = {"scenario": scenario["name"], "scenario_file": args.scenario,
+               "eye_model": args.eye_model,
                "crowd_file": args.crowd, "personas": personas,
                "url": scenario["url"], "model": args.model,
                "results": results, "cost_usd": round(ledger.spent() - spent0, 4)}
@@ -134,6 +135,8 @@ def main():
     c.add_argument("--model", default="muse-spark-1.3")
     c.add_argument("--parallel", type=int, default=2)
     c.add_argument("--effort", default="low")
+    c.add_argument("--eye-model", default="muse-wonder-1.0",
+                   help="looks at a close-up before each click to correct the aim")
     c.add_argument("--max-turns", type=int, default=60, help="cost ceiling per persona")
     c.add_argument("--size", type=int, nargs=2, help="override every persona's device screen")
     c.set_defaults(func=cmd_crowd)
