@@ -1,4 +1,4 @@
-# L'Apprenti
+# Apprentice
 
 An apprentice that learns software the way people do: it watches a tutorial video, then redoes
 it in the real application, click by click, and every step is checked against the app's real
