@@ -132,9 +132,16 @@ class Session:
         self.run.event("start", persona=p["id"], model=self.model, scenario=self.scenario["name"],
                        email=self.email, size=list(self.size))
         outcome, message, turns = "turn limit", "", 0
+        before = None
         for turn in range(self.max_turns):
             turns = turn + 1
             self.desktop.settle(quiet=0.5, timeout=6)
+            # A person notices when a click changes nothing; the model, looking at one blurred
+            # frame at a time, does not, and keeps clicking the same empty spot.
+            bare = self.desktop.grab(cursor=False).tobytes()
+            if before is not None and bare == before and self.journal:
+                self.journal[-1] += " - nothing on the screen changed"
+            before = bare
             raw = self.desktop.screenshot()
             seen = see_png(raw, p.get("eyes"))
             self.run.shot(raw, f"t{turn:02d}-screen")
@@ -156,6 +163,7 @@ class Session:
                     outcome, message = "said done", thought.split(":", 1)[-1].strip()
                     break
                 self.journal.append(f'You thought: "{thought[:240]}" (no action)')
+                before = None
                 continue
             failed = self.act(call, turn)
             self.run.event("turn", turn=turn, thought=thought, actions=call["actions"],
