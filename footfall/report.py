@@ -110,7 +110,7 @@ def before_after(found):
     n = len(found["people"])
     stages = "".join(
         f"<tr><td>{esc(LABELS.get(s, s))}</td><td>{tb['stages'][s]}</td><td>{ta['stages'][s]}</td></tr>"
-        for s in found["stages"] if tb["stages"][s] or ta["stages"][s])
+        for s in found["stages"][:-1] if tb["stages"][s] or ta["stages"][s])
     rows = "".join(
         f"<tr><td>{esc(r['name'])}</td><td>{r['before']['turns']}</td><td>{r['after']['turns']}</td>"
         f"<td>{r['before']['seconds'] / 60:.1f}</td><td>{r['after']['seconds'] / 60:.1f}</td></tr>"
@@ -121,13 +121,13 @@ def before_after(found):
       <p class="lede">The same {n} people, the same task, on the fixed site.</p>
       <div class="kpis">
         <div><b>{tb['verified']}/{n} → {ta['verified']}/{n}</b><span>orders in the store</span></div>
-        <div><b>{tb['turns']} → {ta['turns']}</b><span>actions, whole crowd</span></div>
+        <div><b>{tb['turns']} → {ta['turns']}</b><span>turns, whole crowd</span></div>
         <div><b>{tb['seconds'] / 60:.0f} → {ta['seconds'] / 60:.0f} min</b><span>time, whole crowd</span></div>
       </div>
       <div class="tables">
-        <table><thead><tr><th>Where the actions went</th><th>Before</th><th>After</th></tr></thead>
+        <table><thead><tr><th>Where the turns went</th><th>Before</th><th>After</th></tr></thead>
           <tbody>{stages}</tbody></table>
-        <table><thead><tr><th>Person</th><th>Actions</th><th>After</th><th>Min</th><th>After</th></tr></thead>
+        <table><thead><tr><th>Person</th><th>Turns</th><th>After</th><th>Min</th><th>After</th></tr></thead>
           <tbody>{rows}</tbody></table>
       </div>
     </section>"""
@@ -180,7 +180,7 @@ figcaption {{ font-size:14px; }}
 .kpis {{ display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:12px; }}
 .kpis div {{ background:var(--card); border:1px solid var(--line); border-radius:10px; padding:14px; }}
 .kpis b {{ display:block; font-size:24px; font-variant-numeric:tabular-nums; }}
-.tables {{ display:grid; grid-template-columns:repeat(auto-fit, minmax(300px, 1fr)); gap:12px; margin-top:12px; }}
+.tables {{ display:grid; align-items:start; grid-template-columns:repeat(auto-fit, minmax(300px, 1fr)); gap:12px; margin-top:12px; }}
 table {{ border-collapse:separate; border-spacing:0; width:100%; font-variant-numeric:tabular-nums; }}
 th, td {{ padding:8px 12px; text-align:right; border-bottom:1px solid var(--line); }}
 th:first-child, td:first-child {{ text-align:left; }} tr:last-child td {{ border-bottom:0; }}

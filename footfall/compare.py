@@ -52,7 +52,7 @@ def pick(result, names):
 
 
 LABELS = {"start": "to the product", "product page": "product to cart", "cart": "cart to checkout",
-          "checkout": "checkout to order", "order confirmed": "after the order"}
+          "checkout": "checkout to order"}
 
 
 def report(found):
@@ -68,7 +68,7 @@ def report(found):
                  f"{ta['turns']:<3} {tb['seconds'] / 60:>4.0f} > {ta['seconds'] / 60:<4.0f}")
     lines.append("")
     lines.append("turns spent by the whole crowd")
-    for s in found["stages"]:
+    for s in found["stages"][:-1]:  # past the last stage there is only the "done"
         if tb["stages"][s] or ta["stages"][s]:
             lines.append(f"  {LABELS.get(s, s):<18} {tb['stages'][s]:>4} > {ta['stages'][s]:<4}")
     return "\n".join(lines)
