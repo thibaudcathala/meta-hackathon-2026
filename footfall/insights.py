@@ -18,6 +18,7 @@ tremor, time pressure, scepticism); their screenshots were degraded to match the
 The final outcome of each session was checked in the shop's database.
 
 Task: {task}
+Outcome: {outcome}
 
 {journals}
 
@@ -84,7 +85,10 @@ def parse_json(text):
 
 def analyse(client, crowd_dir, scenario, model="muse-spark-1.3"):
     summary, sessions = load(crowd_dir)
-    prompt = PROMPT.format(task=scenario["task"],
+    done = sum(bool(s["result"].get("verified")) for s in sessions)
+    # Counted here, not by the model: it once summed eight verified orders as "all seven".
+    outcome = f"{done} of {len(sessions)} participants placed a verified order."
+    prompt = PROMPT.format(task=scenario["task"], outcome=outcome,
                            journals="\n\n".join(journal(s) for s in sessions))
     # Eight long journals once filled 6,000 tokens and cut the JSON short: leave room.
     response = client.create({"model": model, "max_output_tokens": 20000,
