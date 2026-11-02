@@ -90,7 +90,7 @@ def cmd_recruit(args):
 
 def cmd_wall(args):
     from . import wall
-    out, speed = wall.build(args.crowd, seconds=args.seconds)
+    out, speed = wall.build(args.crowd, args.out, seconds=args.seconds, speed=args.speed)
     print(f"{out} (x{speed:.0f} speed)")
 
 
@@ -165,6 +165,8 @@ def main():
     w = sub.add_parser("wall", help="one video with every persona's screen, as they saw it")
     w.add_argument("crowd", help="a runs/<time>-crowd directory")
     w.add_argument("--seconds", type=int, default=45)
+    w.add_argument("--speed", type=float, help="a fixed pace, to put two runs side by side")
+    w.add_argument("--out", help="default: wall.mp4 in the run")
     w.set_defaults(func=cmd_wall)
     n = sub.add_parser("insights", help="friction points from a crowd run, with quotes")
     n.add_argument("crowd")

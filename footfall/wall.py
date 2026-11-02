@@ -92,7 +92,8 @@ def layout(aspects, label=48):
     return boxes
 
 
-def build(crowd_dir, out=None, seconds=45):
+def build(crowd_dir, out=None, seconds=45, speed=None):
+    """`speed` fixes the pace, so two runs of the same crowd play side by side at the same clock."""
     crowd_dir = Path(crowd_dir)
     summary = json.loads((crowd_dir / "crowd.json").read_text())
     personas = {p["id"]: p for p in summary.get("personas") or json.loads(
@@ -102,7 +103,7 @@ def build(crowd_dir, out=None, seconds=45):
     tiles.sort(key=lambda r: -shapes[r["persona"]])  # laptops, then tablets, then phones
     boxes = layout([shapes[r["persona"]] for r in tiles])
     longest = max(r.get("seconds", 60) for r in tiles)
-    speed = max(longest / seconds, 1)
+    speed = speed or max(longest / seconds, 1)
     out = Path(out or crowd_dir / "wall.mp4")
     with tempfile.TemporaryDirectory() as tmp:
         inputs, chains = [], []
