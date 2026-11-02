@@ -2,7 +2,6 @@
 it, sped up to the same pace, and closed by the store's verdict on the tile."""
 
 import json
-import math
 import subprocess
 import tempfile
 from pathlib import Path
@@ -51,23 +50,64 @@ def verdict(result):
     return outcome.upper() or "NO ORDER", "0xf85149"
 
 
+def aspect(video):
+    """Width over height of a recording."""
+    out = subprocess.run(["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries",
+                          "stream=width,height", "-of", "csv=p=0", str(video)],
+                         capture_output=True, text=True, check=True).stdout
+    w, h = map(int, out.strip().split(",")[:2])
+    return w / h
+
+
+def split(aspects, count):
+    """Cut a run of tiles into `count` rows of about the same total width."""
+    rows, row, target = [], [], sum(aspects) / count
+    for i, a in enumerate(aspects):
+        left = len(aspects) - i
+        if row and (sum(row) + a / 2 > target or left < count - len(rows)) and len(rows) < count - 1:
+            rows.append(row)
+            row = []
+        row.append(a)
+    return rows + [row]
+
+
+def layout(aspects, label=48):
+    """Justified rows: phones, tablets and laptops each keep their shape, at one height per
+    row, using as much of the frame as possible. Returns (x, y, width, video height) per tile."""
+    best = None
+    for count in range(1, len(aspects) + 1):
+        rows = split(aspects, count)
+        height = min(min(W / sum(r) for r in rows), H / count - label)
+        if best is None or height * height * sum(aspects) > best[0]:
+            best = height * height * sum(aspects), rows, int(height) // 2 * 2
+    _, rows, vh = best
+    boxes, y = [], (H - len(rows) * (vh + label)) // 2
+    for row in rows:
+        widths = [int(a * vh) // 2 * 2 for a in row]
+        x = (W - sum(widths)) // 2
+        for w in widths:
+            boxes.append((x, y, w, vh))
+            x += w
+        y += vh + label
+    return boxes
+
+
 def build(crowd_dir, out=None, seconds=45):
     crowd_dir = Path(crowd_dir)
     summary = json.loads((crowd_dir / "crowd.json").read_text())
     personas = {p["id"]: p for p in summary.get("personas") or json.loads(
         Path(__file__).with_name("personas.json").read_text())}
     tiles = [r for r in summary["results"] if (crowd_dir / r["persona"] / "screen.mp4").exists()]
-    cols = math.ceil(math.sqrt(len(tiles) * 16 / 9 / 1.6))
-    rows = math.ceil(len(tiles) / cols)
-    tw = W // cols
-    th = min(H // rows, tw * 10 // 16 + 48)
-    vh = th - 48
+    shapes = {r["persona"]: aspect(crowd_dir / r["persona"] / "screen.mp4") for r in tiles}
+    tiles.sort(key=lambda r: -shapes[r["persona"]])  # laptops, then tablets, then phones
+    boxes = layout([shapes[r["persona"]] for r in tiles])
     longest = max(r.get("seconds", 60) for r in tiles)
     speed = max(longest / seconds, 1)
     out = Path(out or crowd_dir / "wall.mp4")
     with tempfile.TemporaryDirectory() as tmp:
-        inputs, chains, stack = [], [], []
-        for i, r in enumerate(tiles):
+        inputs, chains = [], []
+        for i, (r, (_, _, tw, vh)) in enumerate(zip(tiles, boxes)):
+            th = vh + 48
             p = personas.get(r["persona"], {})
             inputs += ["-i", str(crowd_dir / r["persona"] / "screen.mp4")]
             label, colour = verdict(r)
@@ -87,14 +127,14 @@ def build(crowd_dir, out=None, seconds=45):
                 f"drawbox=x=0:y={th // 2 - 30}:w={tw}:h=60:color=0x000000@0.75:t=fill:"
                 f"enable='gte(t,{end:.2f})',"
                 f"drawtext=fontfile={BOLD}:textfile={badge}:x=(w-tw)/2:y={th // 2 - 16}:"
-                f"fontsize=30:fontcolor={colour}:enable='gte(t,{end:.2f})'"
+                f"fontsize={min(30, tw // 9)}:fontcolor={colour}:enable='gte(t,{end:.2f})'"
                 f"[t{i}]")
-            stack.append(f"[t{i}]")
-        layout = "|".join(f"{(i % cols) * tw}_{(i // cols) * th}" for i in range(len(tiles)))
-        graph = ";".join(chains) + ";" + "".join(stack) + (
-            f"xstack=inputs={len(tiles)}:layout={layout}:fill=0x111418,"
-            f"pad={W}:{H}:(ow-iw)/2:(oh-ih)/2:color=0x111418,fps=30,format=yuv420p[v]"
-            if len(tiles) > 1 else f"pad={W}:{H}:(ow-iw)/2:(oh-ih)/2:color=0x111418,fps=30,format=yuv420p[v]")
+        # Every tile laid onto one frame-sized background at its place.
+        graph = ";".join(chains) + f";color=c=0x111418:s={W}x{H}:d={seconds + 2}[bg0]"
+        for i, (x, y, _, _) in enumerate(boxes):
+            last = i == len(boxes) - 1
+            graph += (f";[bg{i}][t{i}]overlay={x}:{y}" + (",fps=30,format=yuv420p[v]" if last
+                                                          else f"[bg{i + 1}]"))
         subprocess.run(["ffmpeg", "-loglevel", "error", "-y", *inputs, "-filter_complex", graph,
                         "-map", "[v]", "-t", str(seconds + 2), "-c:v", "libx264",
                         "-preset", "veryfast", "-crf", "22", str(out)], check=True)
