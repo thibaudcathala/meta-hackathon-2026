@@ -1,4 +1,4 @@
-"""Command line: python -m footfall {recruit,crowd,insights,wall,compare,ledger} ..."""
+"""Command line: python -m footfall {recruit,crowd,insights,wall,compare,report,ledger} ..."""
 
 import argparse
 import json
@@ -119,6 +119,11 @@ def cmd_compare(args):
     print(compare.report(found))
 
 
+def cmd_report(args):
+    from . import report
+    print(report.build(args.crowd))
+
+
 def cmd_ledger(args):
     ledger = Ledger(LEDGER)
     print(f"budget ${ledger.budget:.2f} (FOOTFALL_BUDGET_USD), margin ${ledger.margin:.2f}")
@@ -167,6 +172,9 @@ def main():
     k.add_argument("before", help="a runs/<time>-crowd directory")
     k.add_argument("after", help="a later run of the same personas")
     k.set_defaults(func=cmd_compare)
+    o = sub.add_parser("report", help="one HTML page: the crowd, the funnel, the frictions")
+    o.add_argument("crowd", help="a runs/<time>-crowd directory with insights.json")
+    o.set_defaults(func=cmd_report)
     sub.add_parser("ledger", help="show spend so far").set_defaults(func=cmd_ledger)
     args = parser.parse_args()
     args.func(args)
