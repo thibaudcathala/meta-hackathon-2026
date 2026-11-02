@@ -108,7 +108,10 @@ def cmd_insights(args):
         print(f"[{f.get('severity', '?')}] {f['title']} ({', '.join(f.get('who', []))})")
         for ev in f["evidence"][:2]:
             print(f"    {ev['persona']} t{ev['turn']}: \"{ev['quote']}\"")
+        print(f"    seen: {(f.get('witness') or {}).get('seen', '')}")
         print(f"    fix: {f.get('fix', '')}")
+    for f in found.get("harness", []):
+        print(f"[harness, not the site] {f['title']}: {f['witness'].get('seen', '')}")
     print(f"\n{found['summary']}\n({found['dropped']} unsupported frictions dropped)")
 
 

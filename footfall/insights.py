@@ -4,12 +4,20 @@ The facts come from the harness: who reached which funnel stage, after how many 
 whether the store has the order. The model reads every persona's think-aloud journal and groups
 the struggles into friction points, each tied to quotes and turns that can be checked against
 the screenshots. It is asked for evidence, not opinions: a friction without a quote is dropped.
+
+Then a witness looks: for each friction, Muse Spark sees the screens behind its quotes, before
+and after the action, and says whether the site caused it or the harness did (a click that
+landed a row away). Journals report what a person felt; only the screens show why.
 """
 
+import io
 import json
 import re
 from pathlib import Path
 
+from PIL import Image
+
+from .computer import image
 from .meta import output_text
 
 PROMPT = """You are a senior UX researcher. Below are think-aloud journals from a usability test
@@ -35,6 +43,69 @@ Reply with JSON only, this shape:
   "why": "one sentence on the cause, as a designer would see it",
   "fix": "one concrete change to the site"}}],
  "summary": "two sentences for the site owner"}}"""
+
+
+WITNESS = """A usability test ran a simulated person through a website. From their think-aloud
+journal, an analyst reported this friction:
+
+{friction}
+
+Below are the screens behind the evidence. For each quoted turn, three screens in order: before
+the person's previous action, when they said it, and after their next action (the pointer
+shows where each action went). What they did and said:
+{turns}
+
+The test harness is imperfect: its clicks sometimes land a row away from what the person meant,
+and typing can go to the wrong field. Look at the screens and decide what really happened:
+- "site" if the website itself caused the trouble (layout, labels, defaults, feedback),
+- "harness" if a click or keystroke landed somewhere the person did not mean and the site
+  behaved correctly,
+- "unclear" if the screens cannot tell.
+Reply with JSON only: {{"verdict": "site|harness|unclear", "seen": "one sentence: what the
+screens show", "why": "the cause, as a designer would put it, if site", "fix": "one concrete
+change to the site, if site"}}"""
+
+
+def screens(crowd_dir, persona, turn, longest=900):
+    """The raw screens around a turn, scaled down for the witness: what someone remarks on is
+    often the result of what they did the turn before."""
+    out = []
+    for t in (turn - 1, turn, turn + 1):
+        found = sorted((Path(crowd_dir) / persona / "shots").glob(f"*-t{t:02d}-screen.png"))
+        if found:
+            img = Image.open(found[0]).convert("RGB")
+            img.thumbnail((longest, longest))
+            buf = io.BytesIO()
+            img.save(buf, "PNG")
+            out.append(buf.getvalue())
+    return out
+
+
+def witness(client, crowd_dir, friction, sessions, model="muse-spark-1.3"):
+    """Spark looks at the screens behind a friction: does the site cause it, or the harness?"""
+    by_turn = {(s["result"]["persona"], e["turn"]): e
+               for s in sessions for e in s["events"] if e["kind"] == "turn"}
+    content, turns = [], []
+    def did(persona, turn):
+        e = by_turn.get((persona, turn), {})
+        return "; ".join(f"type {a.get('text', '')!r}" if a.get("type") == "type"
+                         else a.get("type", "") for a in e.get("actions", [])) or "nothing"
+
+    for ev in friction["evidence"][:2]:
+        turns.append(f"- {ev['persona']}, turn {ev['turn'] - 1} did: {did(ev['persona'], ev['turn'] - 1)}"
+                     f"\n  turn {ev['turn']} said: \"{ev['quote']}\" and did: {did(ev['persona'], ev['turn'])}")
+        for png in screens(crowd_dir, ev["persona"], ev["turn"]):
+            content.append(image(png))
+    if not content:
+        return None
+    brief = json.dumps({k: friction.get(k) for k in ("title", "where", "why")}, ensure_ascii=False)
+    prompt = WITNESS.format(friction=brief, turns="\n".join(turns))
+    response = client.create({"model": model, "max_output_tokens": 3000,
+                              "reasoning": {"effort": "low"},
+                              "input": [{"role": "user", "content": [
+                                  {"type": "input_text", "text": prompt}, *content]}]},
+                             tag="witness")
+    return parse_json(output_text(response))
 
 
 def load(crowd_dir):
@@ -106,8 +177,17 @@ def analyse(client, crowd_dir, scenario, model="muse-spark-1.3"):
                 thoughts.get((ev.get("persona"), ev.get("turn")), "").lower()]
         if good:
             kept.append({**f, "evidence": good})
-    result = {"summary": found.get("summary", ""), "frictions": kept,
-              "dropped": len(found.get("frictions", [])) - len(kept),
+    # The journals say what people felt; the screens say what happened. A friction that the
+    # screens pin on the harness (a click that landed a row off) is not the site's to fix.
+    for f in kept:
+        seen = witness(client, crowd_dir, f, sessions, model=model) or {}
+        f["witness"] = {k: seen.get(k) for k in ("verdict", "seen")}
+        if seen.get("verdict") == "site":
+            f["why"], f["fix"] = seen.get("why") or f.get("why"), seen.get("fix") or f.get("fix")
+    harness = [f for f in kept if f["witness"].get("verdict") == "harness"]
+    kept = [f for f in kept if f["witness"].get("verdict") != "harness"]
+    result = {"summary": found.get("summary", ""), "frictions": kept, "harness": harness,
+              "dropped": len(found.get("frictions", [])) - len(kept) - len(harness),
               "funnel": funnel(scenario, sessions),
               "results": [s["result"] for s in sessions]}
     (Path(crowd_dir) / "insights.json").write_text(json.dumps(result, indent=1, ensure_ascii=False))
