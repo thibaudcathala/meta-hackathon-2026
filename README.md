@@ -27,11 +27,19 @@ Built for the Meta Global AI Developer Hackathon 2026 (October 26 to November 4)
   store whether an order with the right item exists for that persona's email.
 - **Muse Spark reads every journal** and groups the struggles into friction points. A friction
   is kept only if its quotes appear verbatim in the cited turn.
+- **Then it looks.** A journal says what a person felt, not why. For each friction, Muse Spark
+  is shown the screens around the quoted turns (before the action, at the remark, after) and
+  says whether the site caused it, or the harness did (a click that landed a row away), or
+  whether the screens show no such problem. Harness faults are set aside, not reported.
+- **Fix, run the same crowd again, compare.** The same people, the same task, on the new
+  version of the site: turns and minutes per person and along the funnel.
 
-Status: working on a self-hosted [Medusa](https://github.com/medusajs/dtc-starter) storefront
-(Next.js, MIT), told it is a cheap European basics shop. The recruited crowd of eight (five on
-phones, one on a tablet, two on laptops; one colour-blind man, one 68-year-old with cataracts
-and a slight tremor) was asked to buy one black T-shirt in size M: eight orders verified in the
+## What it did to a real storefront
+
+A self-hosted [Medusa](https://github.com/medusajs/dtc-starter) storefront (Next.js, MIT), told
+it is a cheap European basics shop. The recruited crowd of eight (five on phones, one on a
+tablet, two on laptops; one colour-blind man, one 68-year-old with cataracts and a slight
+tremor) was asked to buy one black T-shirt in size M. Eight orders were verified in the
 database, 22 to 41 turns each, $3.87 of API calls.
 
 What the crowd found, all of it real and none of it planted:
@@ -42,8 +50,26 @@ What the crowd found, all of it real and none of it planted:
 | Country left empty below the address fields | 7 of 8 | preselect the shop's country |
 | Size preselected to XL; on phones, choosing it takes open, pick, close | 7 of 8 | no default size, inline size buttons |
 | Checkout and Place order below the fold | 7 of 8 | sticky action buttons |
-| Delivery cost hidden in a collapsed panel at the foot of the page; product details all "-" | Marco, the sceptic | delivery cost and time next to the button |
-| Home page shows no products, "Menu" is small faint text (earlier crowd) | Margaret, 78 | products or a large Store entry on the home page |
+| Delivery cost hidden in a collapsed panel that runs off a laptop screen | Marco, the sceptic | delivery cost and time next to the button |
+| Home page shows no products | Agneta | products on the home page |
+
+Then the storefront was fixed and the same crowd sent back, three times
+([`fixes/`](fixes) holds the patches):
+
+| Version | Orders | Turns, whole crowd | Minutes, whole crowd | What the crowd said next |
+| --- | --- | --- | --- | --- |
+| Original | 8/8 | 216 | 46 | the table above |
+| Round 1: the fixes above | 8/8 | 123 | 28 | the country now defaults to **Denmark** for everyone (7 of 8 had to change it) |
+| Round 2: country from the browser's languages | 8/8 | 116 | 26 | Marco's opened delivery panel still runs off the screen; payment has one option and it is not selected |
+| Round 3: those two, larger size buttons | 8/8 | **101** | **24** | Standard and Express delivery cost the same, with nothing to tell them apart |
+
+Round 1's own fix caused round 1's main friction: preselecting the country from the URL put
+Denmark in front of a mum in Lyon. The crowd caught it on the first run. Each persona's
+browser now asks for the languages of the country they live in, as a browser bought there
+would, so a site can guess where they are the way it would for a real visitor.
+
+Everything is in `runs/<time>-crowd/report.html`: one page per run with the crowd, the funnel,
+each friction beside the screen as that person saw it, and the before and after.
 
 ## How it works
 
@@ -81,6 +107,8 @@ that this is the fourth tap on the same place.
 | `footfall/store.py` | read-only SQL against the store to check an outcome |
 | `footfall/insights.py` | friction points from the journals, quotes checked against the log |
 | `footfall/wall.py` | one video of every screen, each as its persona saw it, with the verdict |
+| `footfall/compare.py` | the same crowd on two versions of a site, turn by turn along the funnel |
+| `footfall/report.py` | one self-contained HTML page per run |
 | `footfall/meta.py`, `computer.py` | Responses API client and the computer tool's action set |
 | `footfall/budget.py` | prices every call before sending it and refuses anything over budget |
 
@@ -103,6 +131,8 @@ FOOTFALL_BUDGET_USD=5 .venv/bin/python -m footfall crowd scenarios/medusa-tshirt
     --crowd crowds/medusa-tshirt.json --parallel 4
 FOOTFALL_BUDGET_USD=5 .venv/bin/python -m footfall insights runs/<time>-crowd
 .venv/bin/python -m footfall wall runs/<time>-crowd
+.venv/bin/python -m footfall compare runs/<before>-crowd runs/<after>-crowd
+.venv/bin/python -m footfall report runs/<after>-crowd
 .venv/bin/python -m footfall ledger
 ```
 
