@@ -60,8 +60,9 @@ and typing can go to the wrong field. Look at the screens and decide what really
 - "site" if the website itself caused the trouble (layout, labels, defaults, feedback),
 - "harness" if a click or keystroke landed somewhere the person did not mean and the site
   behaved correctly,
+- "absent" if the screens show no such problem at all,
 - "unclear" if the screens cannot tell.
-Reply with JSON only: {{"verdict": "site|harness|unclear", "seen": "one sentence: what the
+Reply with JSON only: {{"verdict": "site|harness|absent|unclear", "seen": "one sentence: what the
 screens show", "why": "the cause, as a designer would put it, if site", "fix": "one concrete
 change to the site, if site"}}"""
 
@@ -103,8 +104,10 @@ def witness(client, crowd_dir, friction, sessions, model="muse-spark-1.3"):
         return acts + (f" ({moved})" if moved else "")
 
     for ev in friction["evidence"][:2]:
-        turns.append(f"- {ev['persona']}, turn {ev['turn'] - 1} did: {did(ev['persona'], ev['turn'] - 1)}"
-                     f"\n  turn {ev['turn']} said: \"{ev['quote']}\" and did: {did(ev['persona'], ev['turn'])}")
+        # What led up to it, in words: the cause can be a few turns back.
+        turns.append(f"- {ev['persona']}:" + "".join(
+            f"\n  turn {t} did: {did(ev['persona'], t)}" for t in range(max(0, ev["turn"] - 3), ev["turn"]))
+            + f"\n  turn {ev['turn']} said: \"{ev['quote']}\" and did: {did(ev['persona'], ev['turn'])}")
         for png in screens(crowd_dir, ev["persona"], ev["turn"]):
             content.append(image(png))
     if not content:
@@ -196,9 +199,11 @@ def analyse(client, crowd_dir, scenario, model="muse-spark-1.3"):
         if seen.get("verdict") == "site":
             f["why"], f["fix"] = seen.get("why") or f.get("why"), seen.get("fix") or f.get("fix")
     harness = [f for f in kept if f["witness"].get("verdict") == "harness"]
-    kept = [f for f in kept if f["witness"].get("verdict") != "harness"]
+    absent = [f for f in kept if f["witness"].get("verdict") == "absent"]
+    kept = [f for f in kept if f["witness"].get("verdict") not in ("harness", "absent")]
     result = {"summary": found.get("summary", ""), "frictions": kept, "harness": harness,
               "dropped": len(found.get("frictions", [])) - len(kept) - len(harness),
+              "absent": absent,
               "funnel": funnel(scenario, sessions),
               "results": [s["result"] for s in sessions]}
     (Path(crowd_dir) / "insights.json").write_text(json.dumps(result, indent=1, ensure_ascii=False))
