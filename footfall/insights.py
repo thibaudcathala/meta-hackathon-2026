@@ -86,10 +86,21 @@ def witness(client, crowd_dir, friction, sessions, model="muse-spark-1.3"):
     by_turn = {(s["result"]["persona"], e["turn"]): e
                for s in sessions for e in s["events"] if e["kind"] == "turn"}
     content, turns = [], []
+    looks = {}
+    for s in sessions:
+        for e in s["events"]:
+            if e["kind"] == "look":
+                looks.setdefault((s["result"]["persona"], e["turn"]), []).append(e)
+
     def did(persona, turn):
         e = by_turn.get((persona, turn), {})
-        return "; ".join(f"type {a.get('text', '')!r}" if a.get("type") == "type"
+        acts = "; ".join(f"type {a.get('text', '')!r}" if a.get("type") == "type"
+                         else f"{a.get('type', '')} at {a['x']},{a['y']}" if "x" in a
                          else a.get("type", "") for a in e.get("actions", [])) or "nothing"
+        moved = "; ".join(f"the harness's eye moved a click from {l['aimed'][0]},{l['aimed'][1]} "
+                          f"to {l['corrected'][0]},{l['corrected'][1]}"
+                          for l in looks.get((persona, turn), []))
+        return acts + (f" ({moved})" if moved else "")
 
     for ev in friction["evidence"][:2]:
         turns.append(f"- {ev['persona']}, turn {ev['turn'] - 1} did: {did(ev['persona'], ev['turn'] - 1)}"
