@@ -324,7 +324,8 @@ class Session:
         with VirtualDesktop(*self.size, log_dir=self.dir) as desktop:
             self.desktop = desktop
             self.browser = Browser(desktop, self.scenario["url"],
-                                   mobile=self.device in ("phone", "tablet")).launch()
+                                   mobile=self.device in ("phone", "tablet"),
+                                   country=self.persona.get("details", {}).get("country")).launch()
             try:
                 if not self.browser.wait_loaded():
                     raise RuntimeError("the site did not load")

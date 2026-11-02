@@ -30,9 +30,18 @@ def free_port():
         return s.getsockname()[1]
 
 
+# The languages a browser bought in that country asks sites for, so a shop can guess where
+# its visitor lives the way it would for a real one.
+LANGUAGES = {"denmark": "da-DK,da,en", "france": "fr-FR,fr,en", "germany": "de-DE,de,en",
+             "italy": "it-IT,it,en", "spain": "es-ES,es,en", "sweden": "sv-SE,sv,en",
+             "united kingdom": "en-GB,en", "ireland": "en-IE,en", "netherlands": "nl-NL,nl,en",
+             "united states": "en-US,en"}
+
+
 class Browser:
-    def __init__(self, desktop, url, mobile=False):
+    def __init__(self, desktop, url, mobile=False, country=None):
         self.desktop, self.start_url, self.mobile = desktop, url, mobile
+        self.languages = LANGUAGES.get((country or "").strip().lower())
         self.port = free_port()
         self.profile = tempfile.mkdtemp(prefix="footfall-chrome-")
 
@@ -45,7 +54,8 @@ class Browser:
             "autofill": {"profile_enabled": False, "credit_card_enabled": False},
             "credentials_enable_service": False,
             "profile": {"password_manager_enabled": False},
-            "translate": {"enabled": False}}))
+            "translate": {"enabled": False},
+            **({"intl": {"accept_languages": self.languages}} if self.languages else {})}))
         w, h = self.desktop.size
         self.proc = self.desktop.launch([
             CHROME, f"--user-data-dir={self.profile}", f"--remote-debugging-port={self.port}",
