@@ -1,4 +1,4 @@
-"""Command line: python -m footfall {recruit,crowd,insights,wall,ledger} ..."""
+"""Command line: python -m footfall {recruit,crowd,insights,wall,compare,ledger} ..."""
 
 import argparse
 import json
@@ -112,6 +112,13 @@ def cmd_insights(args):
     print(f"\n{found['summary']}\n({found['dropped']} unsupported frictions dropped)")
 
 
+def cmd_compare(args):
+    from . import compare
+    found = compare.compare(args.before, args.after)
+    (Path(args.after) / "compare.json").write_text(json.dumps(found, indent=1))
+    print(compare.report(found))
+
+
 def cmd_ledger(args):
     ledger = Ledger(LEDGER)
     print(f"budget ${ledger.budget:.2f} (FOOTFALL_BUDGET_USD), margin ${ledger.margin:.2f}")
@@ -156,6 +163,10 @@ def main():
     n.add_argument("--scenario", help="defaults to the one the crowd ran")
     n.add_argument("--model", default="muse-spark-1.3")
     n.set_defaults(func=cmd_insights)
+    k = sub.add_parser("compare", help="the same crowd on two versions of a site")
+    k.add_argument("before", help="a runs/<time>-crowd directory")
+    k.add_argument("after", help="a later run of the same personas")
+    k.set_defaults(func=cmd_compare)
     sub.add_parser("ledger", help="show spend so far").set_defaults(func=cmd_ledger)
     args = parser.parse_args()
     args.func(args)
