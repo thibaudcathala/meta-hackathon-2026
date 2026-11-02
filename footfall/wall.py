@@ -125,9 +125,10 @@ def build(crowd_dir, out=None, seconds=45, speed=None):
                 f"pad={tw}:{th}:0:48:color=0x111418,"
                 f"drawtext=fontfile={BOLD}:textfile={name}:x=12:y=10:fontsize=22:fontcolor=white,"
                 f"drawtext=fontfile={FONT}:textfile={note}:x=12:y=34:fontsize=12:fontcolor=0x8b95a5,"
-                f"drawbox=x=0:y={th // 2 - 30}:w={tw}:h=60:color=0x000000@0.75:t=fill:"
+                # The verdict sits at the foot of the tile, under the page's own "Thank you".
+                f"drawbox=x=0:y={th - 72}:w={tw}:h=60:color=0x000000@0.8:t=fill:"
                 f"enable='gte(t,{end:.2f})',"
-                f"drawtext=fontfile={BOLD}:textfile={badge}:x=(w-tw)/2:y={th // 2 - 16}:"
+                f"drawtext=fontfile={BOLD}:textfile={badge}:x=(w-tw)/2:y={th - 58}:"
                 f"fontsize={min(30, tw // 9)}:fontcolor={colour}:enable='gte(t,{end:.2f})'"
                 f"[t{i}]")
         # Every tile laid onto one frame-sized background at its place.

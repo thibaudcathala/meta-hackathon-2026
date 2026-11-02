@@ -1,5 +1,6 @@
 """The three-minute demo video, made from the runs themselves: slides rendered by headless
-Chrome, the walls, and the screens each person saw at the turn they spoke.
+Chrome, the walls, one person's session replayed with the model's thoughts, and the screens
+each person saw at the turn they spoke.
 
     python -m demo.build [out.mp4]
 
@@ -8,14 +9,15 @@ Needs the four runs below, the store's database for the order table, Chrome and 
 
 import html
 import json
+import os
 import subprocess
 import sys
 import tempfile
 from pathlib import Path
 
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageFont
 
-from footfall import report, wall
+from footfall import wall
 from footfall.senses import see
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -25,24 +27,26 @@ DB = "postgres://postgres@localhost:5442/medusa-dtc"
 REPO = "github.com/thibaudcathala/meta-hackathon-2026"
 SPEED = 20  # the before/after walls play at the same clock
 FADE = 0.5
+LABEL_FONT = "/usr/share/fonts/opentype/inter/Inter-Bold.otf"
 
 CSS = """
-:root { --bg:#0f1215; --card:#181c21; --line:#2a3038; --ink:#eef0f2; --soft:#9aa3ad;
+:root { --bg:#0f1215; --card:#181c21; --line:#2a3038; --ink:#eef0f2; --soft:#a3abb5;
   --accent:#6ea8ff; --ok:#3fb950; --warn:#f0a35a; --bad:#f85149; }
 * { box-sizing:border-box; margin:0; }
 html, body { width:1920px; height:1080px; overflow:hidden; background:var(--bg); color:var(--ink);
   font-family:Inter, sans-serif; }
-body { padding:72px 96px; display:flex; flex-direction:column; gap:28px; }
+body { padding:72px 96px; display:flex; flex-direction:column; gap:30px; }
 .kicker { color:var(--accent); font-size:26px; font-weight:700; letter-spacing:.08em;
   text-transform:uppercase; }
-h1 { font-size:60px; line-height:1.12; font-weight:800; letter-spacing:-.01em; max-width:1700px; }
-h2 { font-size:30px; font-weight:700; }
-p, li { font-size:30px; line-height:1.4; color:var(--soft); }
+h1 { font-size:60px; line-height:1.12; font-weight:800; letter-spacing:-.01em; max-width:1720px; }
+h2 { font-size:32px; font-weight:700; }
+p, li { font-size:32px; line-height:1.4; color:var(--soft); }
 b { color:var(--ink); }
 .card { background:var(--card); border:1px solid var(--line); border-radius:16px; }
 .shot { border-radius:10px; border:1px solid var(--line); display:block; }
 q { color:var(--ink); font-style:italic; quotes:"\\201C" "\\201D"; }
-.who { font-size:22px; color:var(--soft); margin-top:8px; }
+.who { font-size:24px; color:var(--soft); margin-top:8px; }
+.big { font-size:44px; line-height:1.25; color:var(--ink); font-weight:700; }
 """
 
 
@@ -52,6 +56,15 @@ def esc(text):
 
 def load(run, name):
     return json.loads((ROOT / RUNS[run] / name).read_text())
+
+
+def events(run, persona):
+    return [json.loads(line) for line in
+            (ROOT / RUNS[run] / persona / "events.jsonl").read_text().splitlines()]
+
+
+def persona(run, pid):
+    return next(p for p in load(run, "crowd.json")["personas"] if p["id"] == pid)
 
 
 class Builder:
@@ -64,14 +77,17 @@ class Builder:
         self.n += 1
         return self.tmp / f"{self.n:02d}.{ext}"
 
-    def render(self, body, header=""):
-        """One 1920x1080 PNG of an HTML slide."""
+    def render(self, body, clear=False):
+        """One 1920x1080 PNG of an HTML slide; `clear` keeps the background transparent, to lay
+        the slide over a video."""
         page = self.path("html")
-        page.write_text(f"<!doctype html><html><head><meta charset='utf-8'><style>{CSS}</style>"
-                        f"</head><body>{header}{body}</body></html>")
+        css = CSS + ("html, body { background:transparent; }" if clear else "")
+        page.write_text(f"<!doctype html><html><head><meta charset='utf-8'><style>{css}</style>"
+                        f"</head><body>{body}</body></html>")
         png = page.with_suffix(".png")
         subprocess.run(["google-chrome", "--headless=new", "--disable-gpu", "--hide-scrollbars",
                         "--no-first-run", "--allow-file-access-from-files",
+                        "--default-background-color=00000000",
                         f"--user-data-dir={self.tmp / 'chrome'}", "--window-size=1920,1080",
                         f"--screenshot={png}", page.as_uri()],
                        check=True, capture_output=True)
@@ -80,33 +96,39 @@ class Builder:
     def ffmpeg(self, *args):
         subprocess.run(["ffmpeg", "-loglevel", "error", "-y", *args], check=True)
 
-    def still(self, body, seconds, header=""):
-        png = self.render(body, header)
+    def still(self, body, seconds):
+        png = self.render(body)
         out = self.path("mp4")
         self.ffmpeg("-loop", "1", "-framerate", "30", "-t", str(seconds), "-i", str(png),
                     "-vf", "format=yuv420p", "-c:v", "libx264", "-preset", "veryfast",
                     "-crf", "16", "-tune", "stillimage", str(out))
         self.segments.append((out, seconds))
 
-    def framed(self, steps, videos, seconds, extra=""):
-        """Videos laid onto slides: `steps` is [(start second, html)], each slide showing from
-        its start; `videos` is [(mp4, x, y, w, h, speed-up)]. `extra` is more filters on [v]."""
-        inputs, graph = [], []
-        for i, (_, body) in enumerate(steps):
-            inputs += ["-loop", "1", "-framerate", "30", "-t", str(seconds),
-                       "-i", str(self.render(body))]
-        graph.append("[0:v]null[b1]")
-        for i, (start, _) in enumerate(steps[1:], 1):
-            graph.append(f"[b{i}][{i}:v]overlay=0:0:enable='gte(t,{start})'[b{i + 1}]")
-        bg = f"[b{len(steps)}]"
-        for j, (mp4, x, y, w, h, up) in enumerate(videos):
-            k = len(steps) + j
-            inputs += ["-i", str(mp4)]
-            graph.append(f"[{k}:v]setpts=(PTS-STARTPTS)/{up},scale={w}:{h},"
-                         f"tpad=stop_mode=clone:stop_duration={seconds}[m{j}]")
-            graph.append(f"{bg}[m{j}]overlay={x}:{y}[o{j}]")
-            bg = f"[o{j}]"
-        graph.append(f"{bg}{extra or 'null'},format=yuv420p[v]")
+    def framed(self, steps, videos, seconds, extra="", over=False):
+        """Videos and slides on one frame. `steps` is [(start second, html)], each slide showing
+        until the next one starts; `videos` is [dict(mp4, x, y, w, h, up=speed-up, start=second
+        to start from, look=extra filters)]. Slides go under the videos, or over them (and
+        transparent) when `over`. `extra` is more filters on the finished frame."""
+        inputs, graph, layers = [], [f"color=c=0x0f1215:s=1920x1080:r=30:d={seconds}[l0]"], []
+        for i, (start, body) in enumerate(steps):
+            end = steps[i + 1][0] if i + 1 < len(steps) else seconds + 1
+            layers.append(("slide", (self.render(body, clear=over), start, end)))
+        clips = [("video", v) for v in videos]
+        for n, (kind, item) in enumerate(clips + layers if over else layers + clips):
+            k = len([a for a in inputs if a == "-i"])
+            if kind == "slide":
+                png, start, end = item
+                inputs += ["-loop", "1", "-framerate", "30", "-t", str(seconds), "-i", str(png)]
+                graph.append(f"[l{n}][{k}:v]overlay=0:0:enable='between(t,{start},{end})'[l{n + 1}]")
+            else:
+                v = item
+                inputs += ["-i", str(v["mp4"])]
+                look = f",{v['look']}" if v.get("look") else ""
+                graph.append(f"[{k}:v]trim=start={v.get('start', 0)},setpts=(PTS-STARTPTS)/"
+                             f"{v.get('up', 1)}{look},scale={v['w']}:{v['h']},"
+                             f"tpad=stop_mode=clone:stop_duration={seconds}[m{n}]")
+                graph.append(f"[l{n}][m{n}]overlay={v['x']}:{v['y']}[l{n + 1}]")
+        graph.append(f"[l{len(clips) + len(layers)}]{extra or 'null'},format=yuv420p[v]")
         script = self.path("txt")
         script.write_text(";\n".join(graph))
         out = self.path("mp4")
@@ -139,51 +161,6 @@ def kicker(text, title):
     return f"<div class='kicker'>{esc(text)}</div><h1>{esc(title)}</h1>"
 
 
-# ---- the slides, in the order they play ----
-
-def title():
-    return """
-<div style="margin:auto 0; display:flex; flex-direction:column; gap:36px">
-  <div class="kicker">Meta AI Developer Hackathon 2026 · Indie track</div>
-  <div style="font-size:170px; font-weight:800; letter-spacing:-.03em; line-height:1">Footfall</div>
-  <p style="font-size:44px; color:var(--ink); max-width:1500px; line-height:1.3">A crowd of synthetic
-    customers shops your website, in real browsers, before your real customers do.</p>
-</div>"""
-
-
-def problem():
-    return """
-<div style="margin:auto 0; display:flex; flex-direction:column; gap:56px; max-width:1560px">
-  <p style="font-size:52px; line-height:1.3; color:var(--ink)">Usability tests take weeks, cost
-    thousands, and are often run with people who would never buy from you.</p>
-  <p style="font-size:40px; line-height:1.4">Footfall recruits the right crowd <b>from the site
-    itself</b>, sends them shopping, and checks <b>the store's database</b> for what really
-    happened.</p>
-</div>"""
-
-
-def recruit():
-    crowd = load("before", "crowd.json")
-    cards = []
-    for p in crowd["personas"]:
-        senses = report.senses(p)
-        d = p["details"]
-        cards.append(f"""
-  <div class="card" style="padding:22px 26px; display:flex; flex-direction:column; gap:6px">
-    <div style="display:flex; justify-content:space-between; align-items:baseline">
-      <h2>{esc(p['name'])}, {p['age']}</h2>
-      <span style="font-size:22px; color:var(--accent); font-weight:600">{esc(report.DEVICE[p['device']])}</span></div>
-    <div style="font-size:24px; color:var(--ink)">{esc(p['tag'])}</div>
-    <div style="font-size:22px; color:var(--soft)">{esc(d['city'])}, {esc(d['country'])}</div>
-    {f'<div style="font-size:22px; color:var(--warn)">{esc(senses)}</div>' if senses else ''}
-  </div>""")
-    return (kicker("1 · Recruit", "Muse Spark reads the store and recruits who would really shop there")
-            + f"""
-<div style="display:grid; grid-template-columns:repeat(4, 1fr); gap:20px">{''.join(cards)}</div>
-<p>A shop selling a €10 black T-shirt: students, parents, a grandmother buying a gift. Each person
-  gets a <b>device</b>, <b>eyesight</b>, <b>hands</b>, a <b>language</b> and a home address.</p>""")
-
-
 def header(kick, text):
     """The band above a full-width video."""
     return f"""
@@ -192,79 +169,98 @@ def header(kick, text):
   <div style="font-size:36px; font-weight:700; line-height:1.2; white-space:nowrap">{esc(text)}</div></div>"""
 
 
-def turn_shot(run, persona, turn, kind="seen"):
-    """The screen at a turn: as the person saw it, or the raw one the site drew."""
-    shot = report.shot_of(ROOT / RUNS[run], persona, turn)
-    # Each turn saves the raw screen, then the seen one: 0025-t12-screen.png, 0026-t12-seen.png
-    return shot if kind == "seen" else shot.with_name(f"{int(shot.name[:4]) - 1:04d}-t{turn:02d}-screen.png")
+def shot(run, who, turn, kind="seen"):
+    """The screen at a turn, as the person saw it or as the site drew it. Each turn saves the
+    raw screen, then the seen one: 0025-t12-screen.png, 0026-t12-seen.png."""
+    seen = next(e for e in events(run, who) if e["kind"] == "turn" and e["turn"] == turn)["shot"]
+    path = ROOT / RUNS[run] / who / seen
+    return path if kind == "seen" else path.with_name(f"{int(path.name[:4]) - 1:04d}-t{turn:02d}-screen.png")
 
 
-def thought(run, persona, turn):
-    for line in (ROOT / RUNS[run] / persona / "events.jsonl").read_text().splitlines():
-        e = json.loads(line)
-        if e.get("kind") == "turn" and e.get("turn") == turn:
-            return e["thought"]
+def thought(run, who, turn):
+    return next(e for e in events(run, who) if e["kind"] == "turn" and e["turn"] == turn)["thought"]
 
 
-def eyesight():
-    screen, seen = turn_shot("before", "agneta", 10, "screen"), turn_shot("before", "agneta", 10)
-    return (kicker("3 · Look, think, act", "Each turn, the model gets only what that person sees")
+def totals(run):
+    res = load(run, "crowd.json")["results"]
+    return sum(r["turns"] for r in res), sum(r["seconds"] for r in res) / 60
+
+
+def last_order(run):
+    """Seconds into the recordings when the crowd's last order was confirmed (a session can
+    go on a while after it, until the person says they are done)."""
+    last = 0
+    for pid in (r["persona"] for r in load(run, "crowd.json")["results"]):
+        t = {e["kind"]: e["t"] for e in events(run, pid)
+             if e["kind"] == "record_start" or e.get("stage") == "order confirmed"}
+        if "funnel" in t:
+            last = max(last, t["funnel"] - t["record_start"])
+    return last
+
+
+# ---- the segments, in the order they play ----
+
+def opening(b):
+    """The title over the original store's wall."""
+    before = ROOT / RUNS["before"] / "wall.mp4"
+    body = """
+<div style="position:absolute; inset:0; background:linear-gradient(90deg, rgba(15,18,21,.94) 0%,
+  rgba(15,18,21,.86) 55%, rgba(15,18,21,.55) 100%)"></div>
+<div style="position:relative; margin:auto 0; display:flex; flex-direction:column; gap:36px">
+  <div class="kicker">Meta AI Developer Hackathon 2026 · Indie track</div>
+  <div style="font-size:170px; font-weight:800; letter-spacing:-.03em; line-height:1">Footfall</div>
+  <p style="font-size:46px; color:var(--ink); max-width:1400px; line-height:1.3">A crowd of synthetic
+    customers shops your website, in real browsers, before your real customers do.</p>
+</div>"""
+    b.framed([(0, body)], [dict(mp4=before, x=0, y=0, w=1920, h=1080, up=2, start=4)], 8,
+             over=True)
+
+
+def problem():
+    return """
+<div style="margin:auto 0; display:flex; flex-direction:column; gap:56px; max-width:1600px">
+  <p style="font-size:56px; line-height:1.25; color:var(--ink); font-weight:700">Usability tests take
+    weeks, and the testers rarely look like your customers.</p>
+  <p style="font-size:42px; line-height:1.4">Footfall recruits the right crowd <b>from the site
+    itself</b>, in <b>8 minutes</b>, for <b>about $3</b>. Here: <b>Medusa</b>, a popular
+    open-source store, self-hosted with its real checkout and database.</p>
+</div>"""
+
+
+def recruit():
+    cards = []
+    for p in load("before", "crowd.json")["personas"]:
+        d = p["details"]
+        senses = [p["eyes_note"].split(",")[0]] if p.get("eyes_note") else []
+        if (p.get("hands") or {}).get("tremor"):
+            senses.append("shaky hands")
+        cards.append(f"""
+  <div class="card" style="padding:24px 28px; display:flex; flex-direction:column; gap:8px">
+    <div style="display:flex; justify-content:space-between; align-items:baseline">
+      <h2 style="font-size:36px">{esc(p['name'])}, {p['age']}</h2>
+      <span style="font-size:24px; color:var(--accent); font-weight:600">{esc(p['device'].title())}</span></div>
+    <div style="font-size:27px; color:var(--ink)">{esc(p['tag'])}</div>
+    <div style="font-size:24px; color:var(--soft)">{esc(d['city'])}, {esc(d['country'])}</div>
+    {f'<div style="font-size:26px; color:var(--warn); font-weight:600">{esc(", ".join(senses))}</div>' if senses else ''}
+  </div>""")
+    return (kicker("1 · Recruit", "Muse Spark reads the store and recruits who would really shop there")
             + f"""
-<div style="display:flex; gap:56px; align-items:flex-start">
-  <figure><img class="shot" src="{screen.as_uri()}" style="height:690px">
-    <p style="font-size:24px; margin-top:10px">What the site draws</p></figure>
-  <figure><img class="shot" src="{seen.as_uri()}" style="height:690px">
-    <p style="font-size:24px; margin-top:10px">What Agneta, 68, sees: cataracts</p></figure>
-  <div style="flex:1; display:flex; flex-direction:column; gap:28px; padding-top:20px">
-    <p style="font-size:38px; line-height:1.35"><q>{esc(thought('before', 'agneta', 10))}</q></p>
-    <p class="who">Agneta, turn 10, thinking out loud</p>
-    <p>Her taps also carry a 6 px <b>tremor</b>.</p>
-  </div></div>""")
+<div style="display:grid; grid-template-columns:repeat(4, 1fr); gap:22px">{''.join(cards)}</div>
+<p>Each one gets a <b>device</b>, <b>eyesight</b>, <b>hands</b>, a <b>language</b> and a home address.</p>""")
 
 
-def eye_crop(tmp):
-    """Wonder's view at Agneta's turn 12: a zoomed crop, still through her eyes, with where
-    Spark aimed (ring) and where Wonder put the tap (cross)."""
-    run = ROOT / RUNS["before"]
-    look = next(e for e in map(json.loads, (run / "agneta/events.jsonl").read_text().splitlines())
-                if e.get("kind") == "look" and e.get("turn") == 12)
-    eyes = next(p for p in load("before", "crowd.json")["personas"] if p["id"] == "agneta")["eyes"]
-    img = see(Image.open(turn_shot("before", "agneta", 12, "screen")).convert("RGB"), eyes)
-    (ax, ay), (cx, cy) = look["aimed"], look["corrected"]
-    mx, my, half, k = (ax + cx) // 2, (ay + cy) // 2, 190, 2
-    crop = img.crop((mx - half, my - half, mx + half, my + half)).resize((2 * half * k,) * 2)
-    d = ImageDraw.Draw(crop)
-    ax, ay, cx, cy = ((v - o + half) * k for v, o in ((ax, mx), (ay, my), (cx, mx), (cy, my)))
-    d.line((ax, ay - 30, cx, cy + 40), fill=(248, 81, 73), width=4)
-    d.polygon([(cx, cy + 34), (cx - 14, cy + 58), (cx + 14, cy + 58)], fill=(248, 81, 73))
-    d.ellipse((ax - 26, ay - 26, ax + 26, ay + 26), outline=(110, 168, 255), width=7)
-    d.line((cx - 30, cy, cx + 30, cy), fill=(248, 81, 73), width=7)
-    d.line((cx, cy - 30, cx, cy + 30), fill=(248, 81, 73), width=7)
-    out = Path(tmp) / "eye.png"
-    crop.save(out)
-    seen = Image.open(turn_shot("before", "agneta", 12)).convert("RGB")
-    z = seen.height / img.height  # the persona's view is the screen, enlarged
-    ImageDraw.Draw(seen).rectangle([round(v * z) for v in (mx - half, my - half, mx + half, my + half)],
-                                   outline=(248, 81, 73), width=5)
-    framed = Path(tmp) / "eye-where.png"
-    seen.save(framed)
-    return out, framed, look
-
-
-def eye(tmp):
-    crop, seen, look = eye_crop(tmp)
-    return (kicker("3 · Look, think, act", "Muse Wonder is the eye: it checks where the finger lands")
-            + f"""
-<div style="display:flex; gap:56px; align-items:flex-start">
-  <img class="shot" src="{seen.as_uri()}" style="height:690px">
-  <img class="shot" src="{crop.as_uri()}" style="height:690px">
-  <div style="flex:1; display:flex; flex-direction:column; gap:26px; padding-top:10px">
-    <p style="font-size:34px; line-height:1.35"><q>{esc(thought('before', 'agneta', 12))}</q></p>
-    <p><span style="color:var(--accent); font-weight:700">◯</span> Muse Spark aimed from her
-      blurry view: empty space.</p>
-    <p><span style="color:var(--bad); font-weight:700">✛</span> Muse Wonder looked again at a
-      zoomed crop, still through her eyes, and moved the tap onto the quantity.</p>
-  </div></div>""")
+def shop(b):
+    before = ROOT / RUNS["before"] / "wall.mp4"
+    length = float(subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration",
+                                   "-of", "csv=p=0", str(before)],
+                                  capture_output=True, text=True, check=True).stdout)
+    b.framed([(0, header("2 · Shop", "Eight real Chrome browsers on the Medusa store. Task: buy a "
+                         "black T-shirt, size M.")),
+              (7.5, header("2 · Shop", "Muse Spark is each person's mind, Muse Wonder aims their "
+                           "taps. The yellow tile: cataracts.")),
+              (15, header("2 · Shop", "All eight reach “Thank you”. Each tile's verdict "
+                          "comes from the store's database."))],
+             [dict(mp4=before, x=134, y=150, w=1652, h=930, up=length / 22)], 22)
 
 
 def verify():
@@ -277,21 +273,104 @@ def verify():
          "on a.id = o.shipping_address_id where o.email like '%.20261028-171732@%' "
          "order by o.display_id"], capture_output=True, text=True, check=True).stdout
     names = {p["id"]: p["name"] for p in crowd["personas"]}
+    lines = rows.strip().splitlines()
     table = "".join(
         "<tr>" + "".join(f"<td>{esc(names.get(c, c))}</td>" for c in line.split("\t"))
-        + "<td style='color:var(--ok)'>✓</td></tr>" for line in rows.strip().splitlines())
-    return (kicker("4 · Verify", "Done means an order in the store's database, not a model saying so")
+        + "<td style='color:var(--ok); font-size:34px'>✓</td></tr>" for line in lines)
+    return (kicker("3 · Verify", "Done means an order in the store's database, not a model saying so")
             + f"""
 <style>td, th {{ font-size:28px; padding:9px 28px 9px 0; text-align:left;
   font-family:'DejaVu Sans Mono', monospace; }} th {{ color:var(--soft); font-weight:400; }}</style>
-<div style="display:flex; gap:56px; align-items:flex-start">
+<div style="display:flex; gap:64px; align-items:center">
   <div class="card" style="padding:28px 32px">
     <table><tr><th>order</th><th>customer</th><th>city</th><th>country</th><th>item</th><th></th></tr>
     {table}</table></div>
-  <div style="flex:1; display:flex; flex-direction:column; gap:28px; padding-top:12px">
-    <p style="font-size:44px; color:var(--ink); font-weight:700">8 of 8 orders found</p>
-    <p>Footfall reads the store's own Postgres after each person stops: the order must carry their
-      email and the right item, a black T-shirt in size M.</p>
+  <div style="flex:1; display:flex; flex-direction:column; gap:28px">
+    <div style="font-size:150px; font-weight:800; color:var(--ok); line-height:1">{len(lines)}/8</div>
+    <p class="big">orders found</p>
+    <p>Footfall checks the store's own database: each order must exist, from that person, with the
+      right shirt.</p>
+  </div></div>""")
+
+
+def live(b):
+    """Agneta's session replayed through her eyes, with Muse Spark's thought at each step as it
+    happened, and the call that produced it."""
+    who, first, last = "agneta", 9, 13
+    ev = events("before", who)
+    rec = next(e["t"] for e in ev if e["kind"] == "record_start")
+    turns = {e["turn"]: e for e in ev if e["kind"] == "turn"}
+    looked = {e["turn"] for e in ev if e["kind"] == "look"}
+    calls = [json.loads(line) for line in
+             (ROOT / RUNS["before"] / who / "responses.jsonl").read_text().splitlines()]
+    start = turns[first]["t"] - rec - 4
+    seconds = 20
+    up = (turns[last]["t"] - rec + 7 - start) / seconds
+    steps = []
+    for turn in range(first, last + 1):
+        call = calls[turn]
+        eye = ("<p style='font-size:28px; margin-top:18px'><b style='color:var(--bad)'>Muse "
+               "Wonder</b> checked where her finger lands</p>") if turn in looked else ""
+        steps.append((0 if turn == first else (turns[turn]["t"] - rec - start - 1.5) / up,
+                      kicker("4 · Look, think, act", "Agneta, live: Muse Spark plays her from what "
+                             "she sees")
+                      + f"""
+<div style="position:absolute; left:860px; top:330px; width:960px; display:flex; flex-direction:column; gap:18px">
+  <div style="font-size:26px; color:var(--accent); font-weight:700">STEP {turn}, THINKING OUT LOUD</div>
+  <p style="font-size:46px; line-height:1.3"><q>{esc(turns[turn]['thought'])}</q></p>
+  <div class="card" style="padding:16px 22px; margin-top:12px; font-family:'DejaVu Sans Mono', monospace;
+    font-size:24px; color:var(--soft)">{esc(call['model'])} · {call['completed_at'] - call['created_at']:.0f} s ·
+    {call['usage']['input_tokens']:,} tokens in, one screenshot</div>
+  {eye}
+</div>"""))
+    p = persona("before", who)
+    b.framed(steps, [dict(mp4=ROOT / RUNS["before"] / who / "screen.mp4", x=96, y=270, w=582, h=780,
+                          up=up, start=start, look=",".join(wall.eyes_filter(p["eyes"])))],
+             seconds)
+
+
+def eye_crop(tmp):
+    """Wonder's view at Agneta's turn 12: a zoomed crop, still through her eyes, with where
+    Spark aimed and where Wonder put the tap, and where that crop sits on her screen."""
+    look = next(e for e in events("before", "agneta") if e["kind"] == "look" and e["turn"] == 12)
+    img = see(Image.open(shot("before", "agneta", 12, "screen")).convert("RGB"),
+              persona("before", "agneta")["eyes"])
+    (ax, ay), (cx, cy) = look["aimed"], look["corrected"]
+    mx, my, half, k = (ax + cx) // 2, (ay + cy) // 2, 190, 2
+    crop = img.crop((mx - half, my - half, mx + half, my + half)).resize((2 * half * k,) * 2)
+    d = ImageDraw.Draw(crop)
+    font = ImageFont.truetype(LABEL_FONT, 34)
+    ax, ay, cx, cy = ((v - o + half) * k for v, o in ((ax, mx), (ay, my), (cx, mx), (cy, my)))
+    blue, red = (46, 110, 230), (220, 50, 40)
+    d.line((ax, ay - 34, cx, cy + 46), fill=red, width=5)
+    d.polygon([(cx, cy + 36), (cx - 15, cy + 62), (cx + 15, cy + 62)], fill=red)
+    d.ellipse((ax - 28, ay - 28, ax + 28, ay + 28), outline=blue, width=8)
+    d.ellipse((cx - 34, cy - 34, cx + 34, cy + 34), outline=red, width=8)
+    d.text((ax + 48, ay - 20), "Spark aimed here", font=font, fill=blue)
+    moved = "Wonder moved it here"
+    d.text((cx, cy - 50), moved, font=font, fill=red, anchor="mb")
+    out = Path(tmp) / "eye.png"
+    crop.save(out)
+    seen = Image.open(shot("before", "agneta", 12)).convert("RGB")
+    z = seen.height / img.height  # the persona's view is the screen, enlarged
+    ImageDraw.Draw(seen).rectangle([round(v * z) for v in (mx - half, my - half, mx + half, my + half)],
+                                   outline=red, width=6)
+    where = Path(tmp) / "eye-where.png"
+    seen.save(where)
+    return out, where
+
+
+def eye(tmp):
+    crop, where = eye_crop(tmp)
+    return (kicker("4 · Look, think, act", "Muse Wonder is the eye: it checks where the finger lands")
+            + f"""
+<div style="display:flex; gap:56px; align-items:flex-start">
+  <img class="shot" src="{where.as_uri()}" style="height:700px">
+  <img class="shot" src="{crop.as_uri()}" style="height:700px">
+  <div style="flex:1; display:flex; flex-direction:column; gap:30px; padding-top:10px">
+    <p class="big">Step 12: Spark aimed at empty space.</p>
+    <p>Wonder looked again at a zoomed crop, still through her cataracts, and moved the tap onto
+      the quantity.</p>
   </div></div>""")
 
 
@@ -307,12 +386,12 @@ def frictions():
         quote = next(e["quote"] for e in f["evidence"] if e["persona"] == who and e["turn"] == turn)
         cards.append(f"""
   <div class="card" style="padding:20px; display:flex; gap:22px; flex:1">
-    <img class="shot" src="{turn_shot('before', who, turn).as_uri()}" style="height:600px">
+    <img class="shot" src="{shot('before', who, turn).as_uri()}" style="height:620px">
     <div style="display:flex; flex-direction:column; gap:16px">
-      <div style="font-size:22px; font-weight:700; color:var(--warn)">{len(f['who'])} OF 8 PEOPLE</div>
+      <div style="font-size:30px; font-weight:800; color:var(--warn)">{len(f['who'])} of 8 people</div>
       <h2 style="font-size:30px; line-height:1.2">{esc(title_)}</h2>
       <p style="font-size:25px; line-height:1.35"><q>{esc(quote)}</q></p>
-      <p class="who">{esc(names[who])}, turn {turn}</p>
+      <p class="who">{esc(names[who])}</p>
     </div></div>""")
     return (kicker("5 · Find", "What got in their way, in their words, on the screen they saw")
             + f"<div style='display:flex; gap:24px'>{''.join(cards)}</div>")
@@ -322,144 +401,68 @@ def witness():
     found = load("before", "insights.json")
     kept = next(x for x in found["frictions"] if x["title"].startswith("No add-to-cart"))
     aside = found["harness"][0]
-    return (kicker("5 · Find", "Then Muse Spark looks again: was it the site, or the test harness?")
+    card = lambda colour, label, title_, text: f"""
+  <div class="card" style="padding:36px; flex:1; border:3px solid {colour}">
+    <div style="font-size:28px; font-weight:800; color:{colour}">{label}</div>
+    <h2 style="margin:14px 0; font-size:36px">{esc(title_)}</h2>
+    <p>{text}</p></div>"""
+    return (kicker("5 · Find", "Then Muse Spark double-checks every complaint on the screens")
+            + "<p>It sees the screens before, at and after each quote, and what the person did.</p>"
+            + "<div style='display:flex; gap:32px'>"
+            + card("var(--ok)", "✓ KEPT: THE SITE", kept["title"],
+                   f"Spark's note: <q>{esc(kept['witness']['seen'])}</q>")
+            + card("var(--soft)", "✗ SET ASIDE: OUR TEST TOOL", aside["title"],
+                   "The harness itself typed <b>MadridMadrid</b> in the city field. Not the "
+                   "site's fault, so it is not reported.")
+            + "</div>")
+
+
+def denmark():
+    q = lambda who, turn: esc(thought("r1", who, turn))
+    img = lambda who, turn, label: f"""
+  <figure><img class="shot" src="{shot('r1', who, turn).as_uri()}" style="height:640px">
+    <p class="who">{label}</p></figure>"""
+    return (kicker("6 · Fix", "Round 1: the crowd caught my own bug")
             + f"""
-<p style="max-width:1500px">For each friction it sees the screens just before, at and after every
-  quote, with what the person did, and gives a verdict.</p>
-<div style="display:flex; gap:28px">
-  <div class="card" style="padding:32px; flex:1; border-color:var(--ok)">
-    <div style="font-size:24px; font-weight:700; color:var(--ok)">KEPT · THE SITE</div>
-    <h2 style="margin:12px 0">{esc(kept['title'])}</h2>
-    <p>{esc(kept['witness']['seen'])}</p></div>
-  <div class="card" style="padding:32px; flex:1; border-color:var(--soft)">
-    <div style="font-size:24px; font-weight:700; color:var(--soft)">SET ASIDE · THE HARNESS</div>
-    <h2 style="margin:12px 0">{esc(aside['title'])}</h2>
-    <p>{esc(aside['witness']['seen'])} A keystroke of the harness, not a fault of the site.</p></div>
-</div>""")
+<div style="display:flex; gap:40px; align-items:flex-start">
+  {img('camille', 7, 'Camille, Lyon')}
+  {img('chloe', 5, 'Chloe, Manchester')}
+  <div style="flex:1; display:flex; flex-direction:column; gap:26px; padding-top:6px">
+    <p class="big" style="font-size:50px">My fix set everyone's country to <span style="color:var(--bad)">Denmark</span>.
+      7 of 8 had to change it.</p>
+    <p style="font-size:30px"><q>{q('camille', 7)}</q> <span class="who">Camille</span></p>
+    <p style="font-size:30px"><q>{q('chloe', 5)}</q> <span class="who">Chloe</span></p>
+    <p>Round 2 guesses the country from the browser's languages, and each person's Chrome now
+      speaks their own.</p>
+  </div></div>""")
 
 
 def rounds():
     rows = [("Original store", "before", None, "var(--soft)"),
-            ("Round 1", "r1", "Products on the home page, size not preselected, add-to-cart "
-             "confirmation, checkout button kept on screen, country first", "var(--accent)"),
+            ("Round 1", "r1", "Add-to-cart confirmation, checkout button always on screen, "
+             "size chosen by the shopper, country first <span style='color:var(--bad)'>(and the "
+             "Denmark bug)</span>", "var(--accent)"),
             ("Round 2", "r2", "Country guessed from the browser's languages", "var(--accent)"),
-            ("Round 3", "r3", "Product details unstuck, bigger size buttons, the only payment "
-             "preselected", "var(--ok)")]
+            ("Round 3", "r3", "Product details no longer stuck, bigger size buttons, the only "
+             "payment preselected", "var(--ok)")]
     out = []
     for label, run, what, colour in rows:
         turns, minutes = totals(run)
         done = sum(bool(r.get("verified")) for r in load(run, "crowd.json")["results"])
         out.append(f"""
-  <div style="display:grid; grid-template-columns:260px 1fr; gap:28px; align-items:center">
+  <div style="display:grid; grid-template-columns:250px 1fr; gap:28px; align-items:center">
     <h2>{label}</h2>
     <div><div style="display:flex; align-items:center; gap:22px">
-      <div style="height:46px; width:{turns / 216 * 960:.0f}px; background:{colour}; border-radius:8px"></div>
-      <span style="font-size:30px; font-weight:700; white-space:nowrap">{turns} turns · {minutes:.0f} min · {done}/8 orders</span></div>
-      {f'<p style="font-size:23px; margin-top:6px">{esc(what)}</p>' if what else ''}</div></div>""")
+      <div style="height:50px; width:{turns / 216 * 900:.0f}px; background:{colour}; border-radius:8px"></div>
+      <span style="font-size:32px; font-weight:700; white-space:nowrap">{turns} turns · {minutes:.0f} min · {done}/8 orders</span></div>
+      {f'<p style="font-size:25px; margin-top:6px">{what}</p>' if what else ''}</div></div>""")
+    tb, ta = totals("before")[0], totals("r3")[0]
     return (kicker("6 · Fix", "Fix the store, send the same eight people again")
-            + f"<div style='display:flex; flex-direction:column; gap:30px; margin-top:16px'>{''.join(out)}</div>"
-            + "<p style='margin-top:8px'>The whole crowd needed <b>53 % fewer turns</b> to buy the same "
-              "T-shirt. The fixes are plain patches on the open-source Medusa storefront.</p>")
-
-
-def denmark():
-    camille, chloe = turn_shot("r1", "camille", 7), turn_shot("r1", "chloe", 5)
-    q = lambda who, turn: esc(thought("r1", who, turn))
-    return (kicker("6 · Fix", "Round 1: the crowd caught my own bug")
-            + f"""
-<div style="display:flex; gap:40px; align-items:flex-start">
-  <img class="shot" src="{camille.as_uri()}" style="height:700px">
-  <img class="shot" src="{chloe.as_uri()}" style="height:700px">
-  <div style="flex:1; display:flex; flex-direction:column; gap:26px; padding-top:6px">
-    <div><p style="font-size:34px"><q>{q('camille', 7)}</q></p><p class="who">Camille, Lyon</p></div>
-    <div><p style="font-size:34px"><q>{q('chloe', 5)}</q></p><p class="who">Chloe, Manchester</p></div>
-    <p>My fix preselected the country from the URL: <b>Denmark</b>, for everyone. 7 of 8 had to
-      change it. Round 2 reads the browser's languages, and each person's Chrome now speaks their
-      own.</p>
-  </div></div>""")
-
-
-def meta():
-    col = lambda name, what: f"""
-  <div class="card" style="padding:36px; flex:1">
-    <h2 style="font-size:40px; color:var(--accent)">{name}</h2>
-    <ul style="margin-top:18px; padding-left:30px; display:flex; flex-direction:column; gap:12px">
-      {''.join(f'<li>{esc(w)}</li>' for w in what)}</ul></div>"""
-    return (kicker("Under the hood", "Two Meta models, each doing what it is best at")
-            + "<div style='display:flex; gap:28px'>"
-            + col("Muse Spark 1.3", ["recruits the crowd from the site and its audience",
-                                     "is each person's mind, seeing only their screen",
-                                     "groups frictions, keeps only real quotes",
-                                     "re-checks every friction on the screens"])
-            + col("Muse Wonder 1.0", ["is the eye: closed-loop pointing on a zoomed crop",
-                                      "looks through the person's own eyesight",
-                                      "knows which tap of the turn it is correcting",
-                                      "so a tap lands where the person meant it"])
-            + "</div><p style='font-size:36px; color:var(--ink)'>One crowd of eight: "
-              "<b>about $3</b> and <b>under 8 minutes</b>. Real Chrome, a real store, its real "
-              "database.</p>")
-
-
-def end():
-    log = subprocess.run(["git", "log", "--format=%ad", "--date=format:%b %d"], cwd=ROOT,
-                         capture_output=True, text=True, check=True).stdout.split("\n")
-    log = [d for d in log if d]
-    return f"""
-<div style="margin:auto 0; display:flex; flex-direction:column; gap:34px">
-  <div style="font-size:150px; font-weight:800; letter-spacing:-.03em; line-height:1">Footfall</div>
-  <p style="font-size:44px; color:var(--ink)">{REPO}</p>
-  <p style="font-size:34px">Built during the hackathon, Oct 26 – Nov 4, 2026: first commit
-    {log[-1]}, {len(log)} commits so far.</p>
-</div>"""
-
-
-def build(out):
-    with tempfile.TemporaryDirectory() as tmp:
-        b = Builder(tmp)
-        b.still(title(), 6)
-        b.still(problem(), 9)
-        b.still(recruit(), 14)
-        before = ROOT / RUNS["before"] / "wall.mp4"
-        length = float(subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration",
-                                       "-of", "csv=p=0", str(before)],
-                                      capture_output=True, text=True, check=True).stdout)
-        b.framed([(0, header("2 · Shop", "Eight real Chrome browsers at once. The task: buy one "
-                             "black T-shirt, size M. No script.")),
-                  (8, header("2 · Shop", "Each screen as that person sees it: Agneta's cataracts, "
-                             "Mikkel's red-green colour blindness")),
-                  (16, header("2 · Shop", "Every tile ends on what the store's database says"))],
-                 [(before, 134, 150, 1652, 930, length / 24)], 24)
-        b.still(eyesight(), 9)
-        b.still(eye(tmp), 11)
-        b.still(verify(), 10)
-        b.still(frictions(), 14)
-        b.still(witness(), 10)
-        b.still(rounds(), 14)
-        b.still(denmark(), 13)
-        side_by_side(b, tmp)
-        b.still(meta(), 11)
-        b.still(end(), 7)
-        total = b.join(out)
-    return out, total
-
-
-def last_order(run):
-    """Seconds into the recordings when the crowd's last order was confirmed (a session can
-    go on a while after it, until the person says they are done)."""
-    last = 0
-    for events in (ROOT / RUNS[run]).glob("*/events.jsonl"):
-        t = {}
-        for e in map(json.loads, events.read_text().splitlines()):
-            if e["kind"] == "record_start" or e.get("stage") == "order confirmed":
-                t[e["kind"]] = e["t"]
-        if "funnel" in t:
-            last = max(last, t["funnel"] - t["record_start"])
-    return last
-
-
-def totals(run):
-    res = load(run, "crowd.json")["results"]
-    return sum(r["turns"] for r in res), sum(r["seconds"] for r in res) / 60
+            + f"<div style='display:flex; flex-direction:column; gap:30px; margin-top:6px'>{''.join(out)}</div>"
+            + f"""<div style="display:flex; align-items:baseline; gap:32px; margin-top:12px">
+  <div style="font-size:96px; font-weight:800; color:var(--ok); white-space:nowrap">−{100 - 100 * ta / tb:.0f} %</div>
+  <p>turns to buy the same T-shirt. A turn is one look, think and act step of one person;
+    minutes are the eight people's added up.</p></div>""")
 
 
 def side_by_side(b, tmp):
@@ -469,24 +472,80 @@ def side_by_side(b, tmp):
         mp4 = Path(tmp) / f"wall-{run}.mp4"
         wall.build(ROOT / RUNS[run], mp4, seconds=24, speed=SPEED)
         walls.append((mp4, last_order(run)))
-    (tb, mb), (ta, ma) = totals("before"), totals("r3")
     w, h, y = 900, 506, 280
-    label = lambda x, text: (f"<div style='position:absolute; left:{x}px; top:{y - 64}px; "
-                             f"font-size:32px; font-weight:700'>{text}</div>")
-    body = (header("6 · Fix", "The same eight people, at the same speed: before, and after "
-                   "three rounds of fixes")
-            + label(40, "Original store") + label(980, "After round 3")
-            + f"<p style='position:absolute; left:40px; top:{y + h + 50}px; font-size:30px'>"
-              "Clock: real time, until the crowd's last order. Whole crowd: "
-              f"<b>{tb} → {ta} turns</b>, <b>{mb:.0f} → {ma:.0f} minutes</b>.</p>")
-    clocks = []
-    for (_, longest), x in zip(walls, (40, 980)):
-        t = f"min(t*{SPEED}\\,{longest:.0f})"
-        clocks.append(f"drawtext=fontfile={wall.BOLD}:fontsize=40:fontcolor=white:"
-                      f"x={x + w}-tw:y={y - 64}:text='%{{eif\\:trunc({t}/60)\\:d}}\\:"
-                      f"%{{eif\\:mod(trunc({t})\\,60)\\:d\\:2}}'")
-    b.framed([(0, body)], [(walls[0][0], 40, y, w, h, 1), (walls[1][0], 980, y, w, h, 1)], 24,
-             extra=",".join(clocks))
+    label = lambda x, text: (f"<div style='position:absolute; left:{x}px; top:{y - 70}px; "
+                             f"font-size:34px; font-weight:700'>{text}</div>")
+    body = (header("6 · Fix", "The same eight people at once, before and after the fixes")
+            + label(40, "Original store <span style='color:var(--soft); font-weight:400'>· run Oct 28</span>")
+            + label(980, "After round 3 <span style='color:var(--soft); font-weight:400'>· run Nov 2</span>")
+            + f"<p style='position:absolute; left:40px; top:{y + h + 50}px; font-size:32px'>"
+              "The clock is real time, until the crowd's last order.</p>")
+    marks = []
+    for (_, last), x in zip(walls, (40, 980)):
+        t = f"min(t*{SPEED}\\,{last:.0f})"
+        marks.append(f"drawtext=fontfile={wall.BOLD}:fontsize=44:fontcolor=white:"
+                     f"x={x + w}-tw:y={y - 74}:text='%{{eif\\:trunc({t}/60)\\:d}}\\:"
+                     f"%{{eif\\:mod(trunc({t})\\,60)\\:d\\:2}}'")
+        marks.append(f"drawtext=fontfile={wall.BOLD}:fontsize=36:fontcolor=0x3fb950:"
+                     f"x={x + w}-tw:y={y + h + 50}:text='ALL 8 ORDERED':"
+                     f"enable='gte(t,{last / SPEED:.2f})'")
+    b.framed([(0, body)], [dict(mp4=walls[0][0], x=40, y=y, w=w, h=h),
+                           dict(mp4=walls[1][0], x=980, y=y, w=w, h=h)], 24,
+             extra=",".join(marks))
+
+
+def meta():
+    col = lambda name, what: f"""
+  <div class="card" style="padding:36px; flex:1">
+    <h2 style="font-size:42px; color:var(--accent)">{name}</h2>
+    <ul style="margin-top:18px; padding-left:30px; display:flex; flex-direction:column; gap:12px">
+      {''.join(f'<li style="color:var(--ink)">{esc(w)}</li>' for w in what)}</ul></div>"""
+    return (kicker("Under the hood", "One crowd of eight: about $3 and under 8 minutes")
+            + "<div style='display:flex; gap:28px'>"
+            + col("Muse Spark 1.3", ["recruits the crowd from the site",
+                                     "plays each shopper, seeing only their screen",
+                                     "writes up what went wrong, with quotes",
+                                     "double-checks each problem on the screens"])
+            + col("Muse Wonder 1.0", ["is the eye: re-checks every tap on a zoomed crop",
+                                      "through the person's own eyesight",
+                                      "so taps land where the person meant"])
+            + "</div><p class='big' style='margin-top:20px'>Every shopper who gives up is a lost "
+              "sale. Footfall finds what stops them before real customers arrive.</p>")
+
+
+def end():
+    log = subprocess.run(["git", "log", "--format=%ad", "--date=format:%b %d"], cwd=ROOT,
+                         capture_output=True, text=True, check=True,
+                         env={**os.environ, "LC_ALL": "C"}).stdout.split()
+    first = " ".join(log[-2:])
+    return f"""
+<div style="margin:auto 0; display:flex; flex-direction:column; gap:36px">
+  <div style="font-size:150px; font-weight:800; letter-spacing:-.03em; line-height:1">Footfall</div>
+  <p style="font-size:48px; color:var(--ink)">{REPO}</p>
+  <p style="font-size:36px">Built during the hackathon: first commit {first},
+    {len(log) // 2} commits.</p>
+</div>"""
+
+
+def build(out):
+    with tempfile.TemporaryDirectory() as tmp:
+        b = Builder(tmp)
+        opening(b)
+        b.still(problem(), 8)
+        b.still(recruit(), 12)
+        shop(b)
+        b.still(verify(), 9)
+        live(b)
+        b.still(eye(tmp), 10)
+        b.still(frictions(), 15)
+        b.still(witness(), 10)
+        b.still(denmark(), 12)
+        b.still(rounds(), 13)
+        side_by_side(b, tmp)
+        b.still(meta(), 10)
+        b.still(end(), 7)
+        total = b.join(out)
+    return out, total
 
 
 if __name__ == "__main__":

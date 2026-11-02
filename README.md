@@ -140,6 +140,11 @@ Each crowd writes `runs/<time>-crowd/`: per persona `events.jsonl`, raw API resp
 screenshot both raw and as seen, `screen.mp4` and `result.json`; then `crowd.json`,
 `insights.json` and `wall.mp4`.
 
+The demo video is built from these runs too: `demo/build.py` renders its slides with headless
+Chrome, replays one person's session with the model's thought at each step, and puts the walls
+of the original store and of the fixed one side by side at the same clock
+(`.venv/bin/python -m demo.build runs/demo.mp4`; the run ids are at the top of the file).
+
 ## Earlier experiment: Apprentice
 
 The hackathon started with `apprentice/`: Muse Spark watched a Blender tutorial video and wrote
