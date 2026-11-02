@@ -98,7 +98,7 @@ def same(a, b, slack=25):
 
 
 LOOK = """{name} is about to {action}{then}. Their thought: "{thought}"
-
+{plan}
 The image is a close-up of {name}'s screen around that spot, enlarged {k}x, as they see it
 ({cw}x{ch} pixels). The
 red cross marks exactly where the pointer is about to land. If it is on what they mean to
@@ -185,7 +185,7 @@ class Session:
                 self.funnel[stage["name"]] = turn
                 self.run.event("funnel", stage=stage["name"], turn=turn, url=url)
 
-    def look(self, action, thought, turn, then=None):
+    def look(self, action, thought, turn, then=None, plan=""):
         """Closed-loop pointing: before a click lands, the persona looks at the spot, as people
         do while they move a mouse, and corrects its aim. The model alone points open-loop: on
         a phone it typed an email 140 pixels below the field and missed dropdown rows by one.
@@ -194,10 +194,10 @@ class Session:
         if action.get("type") not in ("click", "double_click") or "x" not in action:
             return action
         for half, k in self.glances:
-            action = self.glance(action, thought, turn, then, half, k)
+            action = self.glance(action, thought, turn, then, half, k, plan)
         return action
 
-    def glance(self, action, thought, turn, then, half, k):
+    def glance(self, action, thought, turn, then, half, k, plan=""):
         w, h = self.size
         # The model sometimes aims off the screen (Chloe once clicked past its right edge).
         x, y = min(max(int(action["x"]), 0), w - 1), min(max(int(action["y"]), 0), h - 1)
@@ -213,7 +213,7 @@ class Session:
         # In a form the click's purpose is the text typed next: "Fischer" belongs in Last
         # name, not in Company, though both are boxes of the same size side by side.
         then = f", then {describe(then)}" if then and then.get("type") == "type" else ""
-        prompt = LOOK.format(name=self.persona["name"], action=describe(action), then=then,
+        prompt = LOOK.format(name=self.persona["name"], action=describe(action), then=then, plan=plan,
                              thought=thought[:300], k=k, cw=crop.width, ch=crop.height)
         try:
             response = self.client.create({
@@ -235,10 +235,19 @@ class Session:
     def act(self, call, turn, thought=""):
         failed = []
         actions = call["actions"]
+        screen = [unzoom(a, self.zoom) for a in actions]
+        clicks = sum(a.get("type") in ("click", "double_click") for a in actions)
         for i, action in enumerate(actions):
             then = actions[i + 1] if i + 1 < len(actions) else None
-            meant = self.look(unzoom(action, self.zoom), thought, turn, then) \
-                if self.closed_loop else unzoom(action, self.zoom)
+            # The thought covers the whole turn: "pick M and add it to the cart". Alone, the
+            # eye moved Marco's click on M onto Add to cart, and the next click added a second.
+            plan = "" if clicks < 2 else (
+                "\nThe thought covers the whole turn. This turn's actions, in order:\n"
+                + "\n".join(f"{j + 1}. {describe(a)}" + ("   <- this one" if j == i else "")
+                             for j, a in enumerate(screen))
+                + "\nCorrect only this one, toward what it is for; a later action has its own aim.\n")
+            meant = self.look(screen[i], thought, turn, then, plan) \
+                if self.closed_loop else screen[i]
             aimed = self.hands.aim(meant)
             try:
                 self.desktop.execute(aimed)
