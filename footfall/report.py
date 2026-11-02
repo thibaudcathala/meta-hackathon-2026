@@ -98,10 +98,24 @@ def frictions(found, crowd_dir, names):
         <header><span class="sev {esc(f.get('severity'))}">{esc(f.get('severity'))}</span>
           <h3>{esc(f['title'])}</h3><p class="where">{esc(f.get('where'))} · {esc(who)}</p></header>
         <div class="quotes">{''.join(quotes)}</div>
+        {f'<p><b>On the screens.</b> {esc(seen)}</p>' if (seen := (f.get('witness') or {}).get('seen')) else ''}
         <p><b>Why.</b> {esc(f.get('why'))}</p>
         <p><b>Fix.</b> {esc(f.get('fix'))}</p>
       </article>""")
     return "".join(cards)
+
+
+def set_aside(found, names):
+    items = "".join(
+        f"<li><b>{esc(f['title'])}</b> ({esc(', '.join(names.get(w, w) for w in f.get('who', [])))}): "
+        f"{esc(f['witness'].get('seen'))}</li>" for f in found.get("harness", []))
+    if not items:
+        return ""
+    return f"""
+    <section><h2>Set aside: the harness, not the site</h2>
+      <p class="lede">The journals reported these, but the screens show a click or keystroke
+        of the test harness landing where the person did not mean it.</p>
+      <ul class="aside">{items}</ul></section>"""
 
 
 def before_after(found):
@@ -156,7 +170,8 @@ body {{ margin:0; background:var(--bg); color:var(--ink); font:15px/1.5 system-u
 main {{ max-width:1080px; margin:0 auto; padding:32px 16px 64px; }}
 h1 {{ font-size:28px; margin:0 0 4px; }} h2 {{ font-size:20px; margin:40px 0 8px; }}
 h3 {{ font-size:17px; margin:4px 0; }}
-.lede, .where, .tag, .senses, figcaption span, .kpis span {{ color:var(--soft); }}
+.lede, .where, .tag, .senses, figcaption span, .kpis span, .aside {{ color:var(--soft); }}
+.aside li {{ margin:6px 0; }}
 .summary {{ background:var(--card); border:1px solid var(--line); border-radius:10px; padding:16px; }}
 ul.people {{ list-style:none; padding:0; display:grid; gap:12px;
   grid-template-columns:repeat(auto-fill, minmax(230px, 1fr)); }}
@@ -194,9 +209,11 @@ th:first-child, td:first-child {{ text-align:left; }} tr:last-child td {{ border
   <section><h2>Who came</h2><ul class="people">{people(crowd)}</ul></section>
   <section><h2>How far they got</h2>{funnel(found, total)}</section>
   <section><h2>What got in their way</h2>
-    <p class="lede">Each friction is kept only if its quotes are in the journal at that turn;
-      the screen is the one that person was looking at, as they saw it.</p>
+    <p class="lede">Each friction is kept only if its quotes are in the journal at that turn,
+      and a second look at the screens around them confirms the site caused it. The screen
+      shown is the one that person was looking at, as they saw it.</p>
     {frictions(found, crowd_dir, names)}</section>
+  {set_aside(found, names)}
 </main></body></html>
 """
     out = Path(out or crowd_dir / "report.html")
