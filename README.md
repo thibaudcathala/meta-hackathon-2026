@@ -27,7 +27,7 @@ Built for the Meta Global AI Developer Hackathon 2026, from October 26 to Novemb
 
 https://github.com/user-attachments/assets/4ad91bd0-105a-4272-92da-06c0dbce293c
 
-Every frame of it comes from the recorded runs: the wall of browsers, the replayed thoughts, the
+Also on [YouTube](https://youtu.be/a8vHFX6mCUA). Every frame of it comes from the recorded runs: the wall of browsers, the replayed thoughts, the
 database, the clocks.
 
 ---
